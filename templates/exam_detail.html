@@ -1,0 +1,191 @@
+{% extends 'base.html' %}
+{% block title %}{{ exam.exam_id }} — Detail{% endblock %}
+{% block page_title %}Exam Detail — {{ exam.exam_id }}{% endblock %}
+
+{% block content %}
+
+{#
+  Branch abbreviation map — keys must match EXACTLY what is stored in DB (always uppercase).
+  The 'abbr(b)' macro below does the lookup with fallback.
+#}
+{% macro abbr(branch) %}
+{%- set b = branch | upper -%}
+{%- if 'CHEMICAL ENGINEERING' in b or b == 'CHE' -%}CHE
+{%- elif 'CIVIL ENGINEERING' in b or b == 'CIVIL' -%}Civil
+{%- elif 'COMPUTER SCIENCE & AIM' in b or 'COMPUTER SCIENCE AND AIM' in b or b == 'CSM' -%}CSM
+{%- elif 'COMPUTER SCIENCE & DATASCIENCE' in b or 'COMPUTER SCIENCE & DATA SCIENCE' in b or 'COMPUTER SCIENCE AND DATA' in b or b == 'CSD' -%}CSD
+{%- elif 'COMPUTER SCIENCE & ENGINEERING' in b or 'COMPUTER SCIENCE AND ENGINEERING' in b or b == 'CSE' -%}CSE
+{%- elif 'ELECTRICAL & ELECTRONICS' in b or 'ELECTRICAL AND ELECTRONICS' in b or b == 'EEE' -%}EEE
+{%- elif 'ELECTRONICS & COMMUNICATION' in b or 'ELECTRONICS AND COMMUNICATION' in b or b == 'ECE' -%}ECE
+{%- elif 'INFORMATION TECHNOLOGY' in b or b == 'IT' -%}IT
+{%- elif 'MECHANICAL ENGINEERING' in b or b == 'MECH' -%}MECH
+{%- elif 'MBA' in b -%}MBA
+{%- else -%}{{ branch }}
+{%- endif %}
+{% endmacro %}
+
+{% macro branch_color(branch) %}
+{%- set b = branch | upper -%}
+{%- if 'CHEMICAL' in b -%}background:#fce4d6;color:#7e3100
+{%- elif 'CIVIL' in b -%}background:#f8cecc;color:#8b1a1a
+{%- elif 'AIM' in b -%}background:#e8daef;color:#512e5f
+{%- elif 'DATASCIENCE' in b or 'DATA SCIENCE' in b -%}background:#d4e6f1;color:#1a5276
+{%- elif 'COMPUTER SCIENCE' in b -%}background:#d5e8d4;color:#1d6a1d
+{%- elif 'ELECTRICAL' in b or b == 'EEE' -%}background:#e1d5e7;color:#5a1a7a
+{%- elif 'ELECTRONICS' in b or b == 'ECE' -%}background:#dae8fc;color:#0c4a9e
+{%- elif 'INFORMATION' in b or b == 'IT' -%}background:#fff0e0;color:#7a3800
+{%- elif 'MECHANICAL' in b or b == 'MECH' -%}background:#fff2cc;color:#7a5900
+{%- elif 'MBA' in b -%}background:#fef3c7;color:#78350f
+{%- else -%}background:#f0f4f8;color:#374151
+{%- endif %}
+{% endmacro %}
+
+<style>
+  .seat-grid { border-collapse: collapse; width: 100%; font-size: 11px; }
+  .seat-grid th {
+    padding: 5px 8px; background: #1a3c5e; color: #fff;
+    border: 1px solid #2e86ab; text-align: center; font-size: 10px; font-weight: 700;
+  }
+  .seat-grid td {
+    border: 1px solid #d1d5db; text-align: center;
+    padding: 4px 3px; min-width: 90px; vertical-align: middle;
+  }
+  .seat-grid td.row-label {
+    background: #f0f4f8; color: #1a3c5e; font-weight: 700;
+    font-size: 10px; min-width: 40px; padding: 4px 6px;
+  }
+  .seat-occupied { background: #fff; }
+  .seat-empty    { background: #f9fafb; }
+  .roll-no { font-size: 11px; font-weight: 700; color: #1a3c5e; line-height: 1.2; }
+  .branch-tag {
+    display: inline-block; font-size: 9px; font-weight: 700;
+    padding: 1px 5px; border-radius: 10px; margin-top: 2px;
+  }
+  .hall-grid-wrap { overflow-x: auto; }
+</style>
+
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3">
+  <a href="{{ url_for('exams') }}" class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+  {% if exam.pdf_filename %}
+  <a href="{{ url_for('download', filename=exam.pdf_filename) }}" class="btn btn-sm btn-success">
+    <i class="bi bi-download me-1"></i>Download PDF
+  </a>
+  {% endif %}
+</div>
+
+<!-- Exam Info Card -->
+<div class="card mb-3">
+  <div class="card-header"><i class="bi bi-info-circle me-2"></i>Exam Information</div>
+  <div class="card-body">
+    <div class="row g-2" style="font-size:13px">
+      <div class="col-md-3"><strong>Exam ID</strong><br><code>{{ exam.exam_id }}</code></div>
+      <div class="col-md-5"><strong>Exam Name</strong><br>{{ exam.exam_name }}</div>
+      <div class="col-md-2"><strong>Date</strong><br>{{ exam.exam_date }}</div>
+      <div class="col-md-2"><strong>Session</strong><br>{{ exam.session }}</div>
+      <div class="col-12 mt-2">
+        <strong>Total Students Seated:</strong>
+        <span class="badge bg-primary fs-6">{{ exam.total_students }}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Per-Hall Visual Seating Grid -->
+{% for hall_id, hall_seatings in by_hall.items() %}
+
+{% set hcfg = hall_configs.get(hall_id, {'cols': 6, 'rows': 8}) %}
+{% set n_cols = hcfg.cols %}
+{% set n_rows = hcfg.rows %}
+
+{# Build lookup: (row, col) -> seating record #}
+{% set seat_lookup = {} %}
+{% for s in hall_seatings %}
+  {% set key = s.row|string + '_' + s.col|string %}
+  {% set _ = seat_lookup.update({key: s}) %}
+{% endfor %}
+
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-building me-2"></i><strong>{{ hall_id }}</strong></span>
+    <span class="badge bg-primary">{{ hall_seatings|length }} students &nbsp;|&nbsp; {{ n_cols }} cols × {{ n_rows }} rows</span>
+  </div>
+  <div class="card-body">
+    {% if hall_seatings[0].faculty_assigned %}
+    <p class="mb-3" style="font-size:12px;color:#6b7280">
+      <i class="bi bi-person-badge me-1"></i>
+      <strong>Invigilators:</strong> {{ hall_seatings[0].faculty_assigned }}
+    </p>
+    {% endif %}
+
+    <div class="hall-grid-wrap">
+      <table class="seat-grid">
+        <thead>
+          <tr>
+            <th style="min-width:40px">Row \ Col</th>
+            {% for c in range(1, n_cols + 1) %}
+            <th>Col&nbsp;{{ c }}</th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in range(1, n_rows + 1) %}
+          <tr>
+            <td class="row-label">Row&nbsp;{{ r }}</td>
+            {% for c in range(1, n_cols + 1) %}
+            {% set key = r|string + '_' + c|string %}
+            {% set s = seat_lookup.get(key) %}
+            {% if s %}
+            <td class="seat-occupied">
+              <div class="roll-no">{{ s.roll_number }}</div>
+              <span class="branch-tag" style="{{ branch_color(s.branch) }}">{{ abbr(s.branch) | trim }}</span>
+            </td>
+            {% else %}
+            <td class="seat-empty"><span style="color:#d1d5db;font-size:10px">—</span></td>
+            {% endif %}
+            {% endfor %}
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endfor %}
+
+<!-- Master Allocation Table -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-table me-2"></i>Master Allocation List</div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table id="masterTable" class="table table-hover table-sm">
+        <thead>
+          <tr>
+            <th>#</th><th>Roll Number</th><th>Branch</th>
+            <th>Hall</th><th>Row</th><th>Col</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for s in seatings %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td><strong>{{ s.roll_number }}</strong></td>
+            <td>
+              <span class="branch-tag" style="{{ branch_color(s.branch) }}">{{ abbr(s.branch) | trim }}</span>
+            </td>
+            <td>{{ s.hall_id }}</td>
+            <td>{{ s.row }}</td>
+            <td>{{ s.col }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>$('#masterTable').DataTable({pageLength: 50, order: [[3,  'asc'], [4, 'asc'], [5, 'asc']]});</script>
+{% endblock %}

@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.pyo
+instance/exam_seating.db
+uploads/*.xlsx
+uploads/*.xls
+outputs/*.pdf
+outputs/*.zip
+{templates,static
+*.egg-info/
+.env

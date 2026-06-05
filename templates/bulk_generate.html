@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% block title %}Bulk Generate – 6 Exams{% endblock %}
+{% block page_title %}Bulk Generate – 6 Exams{% endblock %}
+{% block content %}
+
+<style>
+  .exam-row {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px 18px;
+    margin-bottom: 12px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .exam-row:hover { border-color: var(--primary-light); box-shadow: 0 2px 10px rgba(46,134,171,.10); }
+  .exam-row.filled { border-color: #22c55e; }
+
+  .exam-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; flex-shrink: 0;
+  }
+  .exam-row.filled .exam-num { background: #22c55e; }
+
+  .result-row { border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; display: flex; align-items: center; gap: 14px; }
+  .result-row.success { background: #f0fdf4; border: 1.5px solid #86efac; }
+  .result-row.error   { background: #fef2f2; border: 1.5px solid #fca5a5; }
+  .result-row.skipped { background: #fffbeb; border: 1.5px solid #fcd34d; }
+
+  .status-badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 700; }
+  .status-badge.success { background: #dcfce7; color: #166534; }
+  .status-badge.error   { background: #fee2e2; color: #991b1b; }
+  .status-badge.skipped { background: #fef3c7; color: #92400e; }
+
+  .download-zip-bar {
+    background: linear-gradient(135deg, var(--primary), var(--primary-light));
+    border-radius: 14px;
+    padding: 22px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+    color: #fff;
+  }
+  .download-zip-bar h5 { margin: 0; font-weight: 700; }
+  .download-zip-bar p  { margin: 4px 0 0; font-size: 13px; opacity: .85; }
+</style>
+
+<!-- Stats bar -->
+<div class="row g-3 mb-3">
+  {% for label, val, icon, bg, col in [
+    ('Students', student_count, 'bi-people-fill',       '#dae8fc', '#0c4a9e'),
+    ('Faculty',  faculty_count, 'bi-person-badge-fill', '#d5e8d4', '#1d6a1d'),
+    ('Active Halls', hall_count,'bi-building',          '#fff2cc', '#7a5900'),
+  ] %}
+  <div class="col-12 col-sm-4">
+    <div class="stat-card d-flex align-items-center gap-3">
+      <div class="stat-icon" style="background:{{ bg }}"><i class="{{ icon }}" style="color:{{ col }}"></i></div>
+      <div><div class="stat-value">{{ val }}</div><div class="stat-label">{{ label }}</div></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if student_count == 0 or faculty_count == 0 or hall_count == 0 %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>Setup incomplete.</strong>
+  {% if student_count == 0 %}<a href="{{ url_for('students') }}">Add students</a> &nbsp;•&nbsp;{% endif %}
+  {% if faculty_count == 0 %}<a href="{{ url_for('faculty') }}">Add faculty</a> &nbsp;•&nbsp;{% endif %}
+  {% if hall_count == 0 %}<a href="{{ url_for('halls') }}">Configure halls</a>{% endif %}
+</div>
+{% endif %}
+
+<!-- ZIP download bar (shown after generation) -->
+{% if zip_filename %}
+<div class="download-zip-bar">
+  <div>
+    <h5><i class="bi bi-file-earmark-zip-fill me-2"></i>All PDFs Ready!</h5>
+    <p>Download all {{ results|selectattr('status','equalto','success')|list|length }} seating plan PDFs in one ZIP file.</p>
+  </div>
+  <a href="{{ url_for('download_zip', filename=zip_filename) }}" class="btn btn-light btn-lg fw-bold px-4">
+    <i class="bi bi-download me-2"></i>Download ZIP
+  </a>
+</div>
+{% endif %}
+
+<!-- Results (shown after generation) -->
+{% if results %}
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-list-check me-2"></i>Generation Results</span>
+    <span class="badge bg-success">{{ results|selectattr('status','equalto','success')|list|length }}/{{ results|length }} Success</span>
+  </div>
+  <div class="card-body">
+    {% for r in results %}
+    <div class="result-row {{ r.status }}">
+      <span class="status-badge {{ r.status }}">
+        {% if r.status == 'success' %}<i class="bi bi-check-circle-fill me-1"></i>Success
+        {% elif r.status == 'error' %}<i class="bi bi-x-circle-fill me-1"></i>Error
+        {% else %}<i class="bi bi-skip-forward-fill me-1"></i>Skipped{% endif %}
+      </span>
+      <div style="flex:1">
+        <strong style="font-size:13px">{{ r.exam_name }}</strong>
+        <span style="font-size:11px;color:#6b7280;margin-left:8px">{{ r.exam_date }}</span>
+        {% if r.status == 'success' %}
+          <span style="font-size:11px;color:#166534;margin-left:8px">{{ r.count }} students seated</span>
+        {% elif r.error %}
+          <span style="font-size:11px;color:#991b1b;margin-left:8px">{{ r.error }}</span>
+        {% endif %}
+      </div>
+      <code style="font-size:11px;color:#6b7280">{{ r.exam_id }}</code>
+      {% if r.status == 'success' and r.pdf %}
+      <a href="{{ url_for('download', filename=r.pdf) }}" class="btn btn-sm btn-outline-success py-0 px-2">
+        <i class="bi bi-download me-1"></i>PDF
+      </a>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- Form -->
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-collection-fill me-2"></i>Configure Up To 6 Exams
+    <span class="text-muted ms-2" style="font-size:12px;font-weight:400">— Each exam gets its own shuffled seating plan &amp; separate PDF</span>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('bulk_generate') }}">
+
+      <!-- Common settings -->
+      <div class="row g-3 mb-4 p-3" style="background:#f8fafc;border-radius:10px;border:1.5px solid #e2e8f0">
+        <div class="col-12">
+          <p class="mb-2" style="font-size:12px;font-weight:700;color:var(--primary);text-transform:uppercase;letter-spacing:.5px">
+            <i class="bi bi-sliders me-1"></i>Common Settings (applied to all exams)
+          </p>
+        </div>
+        <div class="col-12 col-md-5">
+          <label class="form-label">College Name *</label>
+          <input type="text" name="college" class="form-control" required
+            placeholder="e.g. ANITS"/>
+        </div>
+        <div class="col-12 col-md-4">
+          <label class="form-label">Batch (optional)</label>
+          <select name="batch_code" class="form-select">
+            <option value="">All Students</option>
+            {% for b in batches %}
+            <option value="{{ b.batch_code }}">{{ b.batch_code }} — {{ b.current_year_label }} ({{ b.student_count }} students)</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-3">
+          <label class="form-label">Session *</label>
+          <input type="text" name="session" class="form-control" value="10:00 AM - 01:00 PM" required/>
+        </div>
+      </div>
+
+      <!-- 6 exam rows -->
+      {% for i in range(1, 7) %}
+      <div class="exam-row" id="examRow{{ i }}">
+        <div class="d-flex align-items-start gap-3">
+          <div class="exam-num" id="examNum{{ i }}">{{ i }}</div>
+          <div class="flex-grow-1">
+            <div class="row g-2">
+              <div class="col-12 col-md-5">
+                <label class="form-label">Exam {{ i }} Name</label>
+                <input type="text" name="exam_name_{{ i }}" id="name{{ i }}"
+                  class="form-control exam-input" data-idx="{{ i }}"
+                  placeholder="e.g. B.Tech – Mathematics"/>
+              </div>
+              <div class="col-12 col-md-3">
+                <label class="form-label">Date *</label>
+                <input type="date" name="exam_date_{{ i }}" id="date{{ i }}"
+                  class="form-control exam-input" data-idx="{{ i }}"/>
+              </div>
+              <div class="col-12 col-md-3">
+                <label class="form-label">Exam ID <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
+                <input type="text" name="exam_id_{{ i }}" id="eid{{ i }}"
+                  class="form-control" placeholder="Auto-generated if empty"/>
+              </div>
+              <div class="col-12 col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-outline-secondary btn-sm w-100"
+                  onclick="clearRow({{ i }})" title="Clear this row">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+
+      <!-- Info -->
+      <div class="alert alert-info mt-3 mb-4" style="font-size:12px">
+        <i class="bi bi-info-circle me-1"></i>
+        All <strong>{{ student_count }}</strong> students and <strong>{{ faculty_count }}</strong> faculty will be used for every exam.
+        Students are <strong>re-shuffled differently</strong> for each exam so seating arrangements differ.
+        Rows left blank (no name or date) are skipped automatically.
+      </div>
+
+      <div class="d-flex gap-3 align-items-center">
+        <button type="submit" class="btn btn-primary px-4"
+          {% if student_count==0 or faculty_count==0 or hall_count==0 %}disabled{% endif %}>
+          <i class="bi bi-collection-fill me-2"></i>Generate All &amp; Download ZIP
+        </button>
+        <button type="button" class="btn btn-outline-danger ms-auto" onclick="clearAll()">
+          <i class="bi bi-trash me-1"></i>Clear All
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+// Highlight row green when both name + date are filled
+function updateRow(i) {
+  const name = document.getElementById('name' + i).value.trim();
+  const date = document.getElementById('date' + i).value.trim();
+  const row  = document.getElementById('examRow' + i);
+  const num  = document.getElementById('examNum' + i);
+  if (name && date) {
+    row.classList.add('filled');
+  } else {
+    row.classList.remove('filled');
+  }
+}
+
+document.querySelectorAll('.exam-input').forEach(el => {
+  el.addEventListener('input', () => updateRow(el.dataset.idx));
+  el.addEventListener('change', () => updateRow(el.dataset.idx));
+});
+
+function clearRow(i) {
+  document.getElementById('name' + i).value = '';
+  document.getElementById('date' + i).value = '';
+  document.getElementById('eid'  + i).value = '';
+  updateRow(i);
+}
+
+function clearAll() {
+  for (let i = 1; i <= 6; i++) clearRow(i);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>{% block title %}Exam Seating Portal{% endblock %}</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/dataTables.bootstrap5.min.css"/>
+  <!-- Flatpickr calendar picker -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
+  <style>
+    :root{--sidebar-w:240px;--primary:#1a3c5e;--primary-light:#2e86ab;--accent:#f18f01}
+    body{background:#f0f4f8;font-family:'Segoe UI',sans-serif;min-height:100vh}
+    /* Sidebar */
+    #sidebar{width:var(--sidebar-w);min-height:100vh;background:var(--primary);position:fixed;top:0;left:0;z-index:1050;transition:transform .25s ease-in-out}
+    #sidebar .brand{padding:20px 20px 16px;border-bottom:1px solid rgba(255,255,255,.12)}
+    #sidebar .brand h5{color:#fff;font-size:13px;font-weight:700;margin:0;letter-spacing:.4px}
+    #sidebar .brand small{color:rgba(255,255,255,.5);font-size:10px}
+    #sidebar .brand img{width:38px;height:38px;border-radius:8px;object-fit:contain;background:#fff;padding:3px;}
+    #sidebar .nav-section{padding:14px 16px 4px;font-size:10px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px;font-weight:600}
+    #sidebar .nav-link{display:flex;align-items:center;gap:10px;padding:9px 20px;color:rgba(255,255,255,.75);font-size:13px;border-radius:0;transition:all .18s;border-left:3px solid transparent}
+    #sidebar .nav-link:hover{color:#fff;background:rgba(255,255,255,.08);border-left-color:var(--accent)}
+    #sidebar .nav-link.active{color:#fff;background:rgba(255,255,255,.12);border-left-color:var(--accent);font-weight:600}
+    #sidebar .nav-link i{font-size:16px;width:20px;text-align:center}
+    /* Main */
+    #main{margin-left:var(--sidebar-w);min-height:100vh;transition:margin-left .25s ease-in-out}
+    .topbar{background:#fff;padding:12px 20px;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.06)}
+    .topbar h6{margin:0;font-size:15px;font-weight:700;color:var(--primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex-shrink:1;min-width:0}
+    .topbar-logo{height:36px;width:36px;object-fit:contain;border-radius:6px;}
+    .content{padding:20px}
+    @media (max-width: 575.98px) {
+      .topbar { padding: 10px 15px; }
+    }
+    @media (max-width: 991.98px) {
+      #sidebar { transform: translateX(-100%); }
+      #sidebar.show { transform: translateX(0); }
+      #main { margin-left: 0 !important; }
+      .content { padding: 15px; }
+    }
+    /* Cards */
+    .stat-card{background:#fff;border-radius:12px;padding:22px 24px;box-shadow:0 2px 8px rgba(0,0,0,.06);border:1px solid #e8edf3}
+    .stat-card .stat-icon{width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px}
+    .stat-card .stat-value{font-size:28px;font-weight:700;color:var(--primary);line-height:1.1}
+    .stat-card .stat-label{font-size:12px;color:#6b7280;margin-top:2px}
+    .card{border:none;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+    .card-header{background:#fff;border-bottom:1px solid #e8edf3;padding:16px 20px;font-weight:700;font-size:14px;color:var(--primary);border-radius:12px 12px 0 0!important}
+    /* Buttons */
+    .btn-primary{background:var(--primary);border-color:var(--primary)}
+    .btn-primary:hover{background:#143055;border-color:#143055}
+    .btn-accent{background:var(--accent);border-color:var(--accent);color:#fff}
+    .btn-accent:hover{background:#d97d00;color:#fff}
+    /* Table */
+    .table th{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#6b7280;font-weight:600;background:#f8fafc;border-bottom:2px solid #e2e8f0}
+    .table td{font-size:13px;vertical-align:middle}
+    /* Badge */
+    .badge-branch{font-size:11px;padding:3px 8px;border-radius:20px;font-weight:600}
+    /* Alerts */
+    .alert{border-radius:10px;font-size:13px}
+    /* Modal */
+    .modal-header{background:var(--primary);color:#fff;border-radius:12px 12px 0 0}
+    .modal-title{font-size:15px;font-weight:600}
+    .modal-header .btn-close{filter:invert(1)}
+    /* Form */
+    .form-label{font-size:12px;font-weight:600;color:#374151}
+    .form-control,.form-select{font-size:13px;border-radius:8px;border:1.5px solid #d1d5db}
+    .form-control:focus,.form-select:focus{border-color:var(--primary-light);box-shadow:0 0 0 3px rgba(46,134,171,.12)}
+    /* Page title */
+    .page-title{font-size:20px;font-weight:700;color:var(--primary);margin-bottom:4px}
+    .page-subtitle{font-size:13px;color:#6b7280;margin-bottom:20px}
+    /* Branch colors */
+    .branch-CSE,.branch-Chemical{background:#d5e8d4;color:#1d6a1d}
+    .branch-ECE,.branch-Electrical{background:#dae8fc;color:#0c4a9e}
+    .branch-MECH,.branch-Mechanical{background:#fff2cc;color:#7a5900}
+    .branch-CIVIL,.branch-Civil{background:#f8cecc;color:#8b1a1a}
+    .branch-EEE{background:#e1d5e7;color:#5a1a7a}
+    .branch-IT{background:#fde9d9;color:#8b3a00}
+    .branch-CSC,.branch-CSD,.branch-CSM{background:#e8f4fd;color:#0c5464}
+    .branch-MBA{background:#fef3c7;color:#78350f}
+    /* Flatpickr override */
+    .flatpickr-calendar{font-family:'Segoe UI',sans-serif!important}
+    /* Scrollbar */
+    ::-webkit-scrollbar{width:6px;height:6px}
+    ::-webkit-scrollbar-track{background:#f0f4f8}
+    ::-webkit-scrollbar-thumb{background:#c0cad6;border-radius:3px}
+  </style>
+</head>
+<body>
+
+<!-- Sidebar Backdrop -->
+<div id="sidebarBackdrop" class="modal-backdrop fade show d-none" style="z-index: 1040;"></div>
+
+<!-- Sidebar -->
+<div id="sidebar">
+  <div class="brand d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-2">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" onerror="this.style.display='none'"/>
+      <div>
+        <h5 class="mb-0"><i class="bi bi-mortarboard-fill me-1"></i>Exam Seating</h5>
+        <small>Admin Portal</small>
+      </div>
+    </div>
+    <button class="btn btn-link text-white d-lg-none p-0" id="sidebarClose">
+      <i class="bi bi-x-lg"></i>
+    </button>
+  </div>
+  <div class="nav-section">Main</div>
+  <a href="{{ url_for('dashboard') }}" class="nav-link {% if request.endpoint=='dashboard' %}active{% endif %}">
+    <i class="bi bi-speedometer2"></i> Dashboard
+  </a>
+  <div class="nav-section">Data Management</div>
+  <a href="{{ url_for('students') }}" class="nav-link {% if request.endpoint=='students' %}active{% endif %}">
+    <i class="bi bi-people-fill"></i> Students
+  </a>
+  <a href="{{ url_for('faculty') }}" class="nav-link {% if request.endpoint=='faculty' %}active{% endif %}">
+    <i class="bi bi-person-badge-fill"></i> Faculty
+  </a>
+  <a href="{{ url_for('halls') }}" class="nav-link {% if request.endpoint=='halls' %}active{% endif %}">
+    <i class="bi bi-building"></i> Halls & Blocks
+  </a>
+  <div class="nav-section">Exams</div>
+  <a href="{{ url_for('generate') }}" class="nav-link {% if request.endpoint=='generate' %}active{% endif %}">
+    <i class="bi bi-lightning-fill"></i> Generate Plan
+  </a>
+  <a href="{{ url_for('bulk_generate') }}" class="nav-link {% if request.endpoint=='bulk_generate' %}active{% endif %}">
+    <i class="bi bi-collection-fill"></i> Bulk Generate (6)
+  </a>
+  <a href="{{ url_for('exams') }}" class="nav-link {% if request.endpoint in ['exams','exam_detail'] %}active{% endif %}">
+    <i class="bi bi-journal-text"></i> Exam History
+  </a>
+  <div class="nav-section">Results</div>
+  <a href="{{ url_for('results') }}" class="nav-link {% if request.endpoint in ['results','result_semester'] %}active{% endif %}">
+    <i class="bi bi-bar-chart-fill"></i> Manage Results
+  </a>
+  <a href="{{ url_for('student_results') }}" class="nav-link {% if request.endpoint=='student_results' %}active{% endif %}" target="_blank">
+    <i class="bi bi-search"></i> Student Portal
+  </a>
+</div>
+
+<!-- Main -->
+<div id="main">
+  <div class="topbar">
+    <div class="d-flex align-items-center gap-3">
+      <button class="btn btn-outline-primary d-lg-none py-1 px-2" id="sidebarToggle">
+        <i class="bi bi-list" style="font-size: 20px;"></i>
+      </button>
+      <!-- Logo in topbar -->
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo" class="topbar-logo d-none d-lg-block" onerror="this.style.display='none'"/>
+      <h6>{% block page_title %}{% endblock %}</h6>
+    </div>
+    <div class="d-flex align-items-center gap-3">
+      <span class="badge" style="background:var(--primary-light);font-size:11px;padding:5px 10px;border-radius:20px">
+        <i class="bi bi-circle-fill me-1" style="font-size:7px;color:#4ade80"></i>System Online
+      </span>
+    </div>
+  </div>
+
+  <div class="content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ 'success' if cat=='success' else 'danger' if cat=='danger' else 'warning' }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-{{ 'check-circle-fill' if cat=='success' else 'exclamation-triangle-fill' }} me-2"></i>{{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+{% block scripts %}{% endblock %}
+<script>
+  $(document).ready(function() {
+    const sidebar = $('#sidebar');
+    const backdrop = $('#sidebarBackdrop');
+
+    function toggleSidebar() {
+      sidebar.toggleClass('show');
+      backdrop.toggleClass('d-none');
+    }
+
+    $('#sidebarToggle, #sidebarClose, #sidebarBackdrop').on('click', function() {
+      toggleSidebar();
+    });
+
+    if (window.innerWidth < 992) {
+      $('#sidebar .nav-link').on('click', function() {
+        if (sidebar.hasClass('show')) toggleSidebar();
+      });
+    }
+
+    // Init all calendar date pickers (class: date-picker)
+    flatpickr('.date-picker', {
+      dateFormat: 'd/m/Y',
+      minDate: 'today',
+      allowInput: false,
+      disableMobile: false,
+    });
+  });
+</script>
+</body>
+</html>

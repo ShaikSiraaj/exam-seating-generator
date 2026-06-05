@@ -1,0 +1,139 @@
+{% extends 'base.html' %}
+{% block title %}Generate Seating Plan{% endblock %}
+{% block page_title %}Generate Seating Plan{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  {% for label, val, icon, color in [
+    ('Students in DB', student_count, 'bi-people-fill', '#0c4a9e'),
+    ('Faculty in DB',  faculty_count, 'bi-person-badge-fill', '#1d6a1d'),
+    ('Active Halls',   hall_count,    'bi-building', '#7a5900'),
+  ] %}
+  <div class="col-12 col-md-4">
+    <div class="stat-card d-flex align-items-center gap-3">
+      <div class="stat-icon" style="background:{{ '#dae8fc' if loop.index==1 else '#d5e8d4' if loop.index==2 else '#fff2cc' }}">
+        <i class="{{ icon }}" style="color:{{ color }}"></i>
+      </div>
+      <div><div class="stat-value">{{ val }}</div><div class="stat-label">{{ label }}</div></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if student_count == 0 or faculty_count == 0 or hall_count == 0 %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>Setup incomplete.</strong>
+  {% if student_count == 0 %}<a href="{{ url_for('students') }}">Add students</a> • {% endif %}
+  {% if faculty_count == 0 %}<a href="{{ url_for('faculty') }}">Add faculty</a> • {% endif %}
+  {% if hall_count == 0 %}<a href="{{ url_for('halls') }}">Configure halls</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-lg-7">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-lightning-fill me-2"></i>New Exam Configuration</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('generate') }}" id="generateForm">
+          <div class="mb-3">
+            <label class="form-label">College Name *</label>
+            <input type="text" name="college" class="form-control" required placeholder="ANITS" value="ANITS"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Exam Name *</label>
+            <input type="text" name="exam_name" class="form-control" required
+              id="examNameInput"
+              value="B.Tech II YEAR II SEMESTER (AR 23 (R)) Regular Semester End Examinations"
+              placeholder="B.Tech II YEAR II SEMESTER (AR 23 (R)) Regular Semester End Examinations"/>
+          </div>
+          <div class="row g-2">
+            <div class="col-md-4">
+              <label class="form-label">Exam ID *</label>
+              <input type="text" name="exam_id" class="form-control" required placeholder="EX2026APR" id="examIdInput"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Exam Date * <small class="text-muted">(today or future only)</small></label>
+              <input type="text" name="exam_date" class="form-control date-picker" required
+                placeholder="Pick a date" id="examDateInput" readonly/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Session *</label>
+              <input type="text" name="session" class="form-control" value="10:00 AM-01:00 PM" required/>
+            </div>
+          </div>
+          <div class="mb-3 mt-3" id="batchRow">
+            <label class="form-label">Batch (optional)</label>
+            <select name="batch_code" class="form-select">
+              <option value="">All batches</option>
+              {% for b in batches %}
+              <option value="{{ b.batch_code }}">{{ b.batch_code }} ({{ b.join_year }}–{{ b.passout_year }})</option>
+              {% endfor %}
+            </select>
+          </div>
+          <hr class="my-3"/>
+          <div class="alert alert-info" style="font-size:12px">
+            <i class="bi bi-info-circle me-1"></i>
+            All <strong>{{ student_count }}</strong> students, <strong>{{ faculty_count }}</strong> faculty and
+            <strong>{{ hall_count }}</strong> active halls will be used.
+          </div>
+          <button type="submit" class="btn btn-primary w-100" {% if student_count==0 or faculty_count==0 or hall_count==0 %}disabled{% endif %}>
+            <i class="bi bi-lightning-fill me-2"></i>Generate Seating Plan & PDF
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clock-history me-2"></i>Recent Exams</div>
+      <div class="card-body p-0">
+        {% if exams %}
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+          <thead><tr><th>Exam ID</th><th>Date</th><th>Students</th><th></th></tr></thead>
+          <tbody>
+            {% for exam in exams[:8] %}
+            <tr>
+              <td><code style="font-size:11px">{{ exam.exam_id }}</code></td>
+              <td style="font-size:12px">{{ exam.exam_date }}</td>
+              <td><span class="badge bg-primary">{{ exam.total_students }}</span></td>
+              <td>
+                {% if exam.pdf_filename %}
+                <a href="{{ url_for('download', filename=exam.pdf_filename) }}" class="btn btn-sm btn-outline-success py-0 px-2">
+                  <i class="bi bi-download"></i>
+                </a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center text-muted py-4" style="font-size:13px">No exams yet</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Auto-generate exam ID
+  const now    = new Date();
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('examIdInput').value = `EX${now.getFullYear()}${months[now.getMonth()]}`;
+
+  // Form validation: ensure date is filled (flatpickr handles min=today)
+  document.getElementById('generateForm').addEventListener('submit', function(e) {
+    const dateVal = document.getElementById('examDateInput').value;
+    if (!dateVal) {
+      e.preventDefault();
+      alert('Please select an exam date.');
+    }
+  });
+});
+</script>
+{% endblock %}

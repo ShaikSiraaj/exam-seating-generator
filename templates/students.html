@@ -1,0 +1,269 @@
+{% extends 'base.html' %}
+{% block title %}Students{% endblock %}
+{% block page_title %}Students{% endblock %}
+{% block content %}
+
+<style>
+  .batch-card {
+    background:#fff; border:1.5px solid #e2e8f0; border-radius:12px;
+    padding:14px 18px; display:flex; align-items:center; gap:14px;
+    transition: all .2s;
+  }
+  .batch-card:hover { border-color:var(--primary-light); box-shadow:0 2px 10px rgba(46,134,171,.1); }
+  .batch-badge {
+    background: var(--primary); color:#fff; border-radius:10px;
+    padding:6px 12px; font-size:13px; font-weight:700; white-space:nowrap;
+  }
+  .batch-year-label { font-size:11px; color:#6b7280; }
+  .active-batch { border-color: var(--primary) !important; background:#f0f9ff; }
+</style>
+
+<!-- Batch cards row -->
+{% if batches %}
+<div class="row g-2 mb-3">
+  {% for b in batches %}
+  <div class="col-12 col-sm-6 col-lg-3">
+    <a href="{{ url_for('students', batch=b.batch_code) }}" class="text-decoration-none">
+      <div class="batch-card {% if batch_filter == b.batch_code %}active-batch{% endif %}">
+        <div class="batch-badge">{{ b.batch_code }}</div>
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--primary)">{{ b.current_year_label }}</div>
+          <div class="batch-year-label">{{ b.join_year }}–{{ b.passout_year }} &bull; {{ b.student_count }} students</div>
+        </div>
+        <form method="POST" action="{{ url_for('delete_batch', bid=b.id) }}" class="ms-auto"
+              onsubmit="return confirm('Delete batch {{ b.batch_code }} and all its students?')">
+          <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-1">
+            <i class="bi bi-trash3" style="font-size:11px"></i>
+          </button>
+        </form>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+  <div class="col-12 col-sm-6 col-lg-3">
+    <div class="batch-card" style="border-style:dashed;cursor:pointer"
+         data-bs-toggle="modal" data-bs-target="#addBatchModal">
+      <i class="bi bi-plus-circle text-muted fs-5"></i>
+      <div style="font-size:13px;color:#6b7280">Add Batch</div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3">
+  <div>
+    <p class="page-subtitle mb-0">
+      {% if batch_filter %}Showing batch <strong>{{ batch_filter }}</strong> —{% endif %}
+      {{ students|length }} students
+      {% if batch_filter %}<a href="{{ url_for('students') }}" class="ms-2 text-muted" style="font-size:12px">Clear filter</a>{% endif %}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-danger btn-sm" data-bs-toggle="modal" data-bs-target="#deleteAllModal">
+      <i class="bi bi-trash3 me-1"></i>Clear
+    </button>
+    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importModal">
+      <i class="bi bi-file-earmark-excel me-1"></i>Import Excel
+    </button>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal">
+      <i class="bi bi-plus-lg me-1"></i>Add Student
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-people-fill me-2"></i>Students ({{ students|length }})</div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table id="studentsTable" class="table table-hover">
+        <thead>
+        <tr><th>#</th><th>Roll Number</th><th>Branch</th><th>Batch</th><th>Section</th><th>Added On</th><th>Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><strong>{{ s.roll_number }}</strong></td>
+          <td><span class="badge badge-branch branch-{{ s.branch }}">{{ s.branch }}</span></td>
+          <td>
+            {% if s.batch_code %}
+            <span class="badge" style="background:#dbeafe;color:#1e40af;font-size:11px">{{ s.batch_code }}</span>
+            {% else %}<span style="color:#9ca3af;font-size:11px">—</span>{% endif %}
+          </td>
+          <td>{{ s.section or '—' }}</td>
+          <td style="font-size:11px;color:#6b7280">{{ s.created_at.strftime('%d %b %Y') }}</td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px"
+              data-bs-toggle="modal" data-bs-target="#editModal"
+              data-id="{{ s.id }}" data-roll="{{ s.roll_number }}" data-branch="{{ s.branch }}"
+              data-batch="{{ s.batch_code or '' }}" data-section="{{ s.section or '' }}">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <form method="POST" action="{{ url_for('delete_student', sid=s.id) }}" style="display:inline">
+              <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:11px"
+                onclick="return confirm('Delete {{ s.roll_number }}?')">
+                <i class="bi bi-trash3"></i>
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Batch Modal -->
+<div class="modal fade" id="addBatchModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Add Batch</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" action="{{ url_for('add_batch') }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Batch Code</label>
+            <input type="text" name="batch_code" class="form-control" placeholder="AY26-30" required/>
+            <div class="form-text">Format: AY26-30 (join year – passout year)</div>
+          </div>
+          <div class="row g-2">
+            <div class="col">
+              <label class="form-label">Join Year</label>
+              <input type="number" name="join_year" class="form-control" placeholder="2026" required/>
+            </div>
+            <div class="col">
+              <label class="form-label">Passout Year</label>
+              <input type="number" name="passout_year" class="form-control" placeholder="2030" required/>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Create Batch</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Student Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i>Add Student</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" action="{{ url_for('add_student') }}">
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Roll Number *</label><input type="text" name="roll_number" class="form-control" required placeholder="e.g. 26981A0501"/></div>
+          <div class="mb-3"><label class="form-label">Branch *</label>
+            <select name="branch" class="form-select" required>
+              <option value="">Select branch</option>
+              {% for b in ['CSE','ECE','MECH','CIVIL','EEE','IT'] %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Batch</label>
+            <select name="batch_code" class="form-select">
+              <option value="">No batch</option>
+              {% for b in batches %}<option value="{{ b.batch_code }}">{{ b.batch_code }} ({{ b.current_year_label }})</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Section</label><input type="text" name="section" class="form-control" placeholder="e.g. A"/></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm">Add Student</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>Edit Student</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" id="editForm">
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Roll Number *</label><input type="text" name="roll_number" id="edit-roll" class="form-control" required/></div>
+          <div class="mb-3"><label class="form-label">Branch *</label>
+            <select name="branch" id="edit-branch" class="form-select" required>
+              {% for b in ['CSE','ECE','MECH','CIVIL','EEE','IT'] %}<option value="{{ b }}">{{ b }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Batch</label>
+            <select name="batch_code" id="edit-batch" class="form-select">
+              <option value="">No batch</option>
+              {% for b in batches %}<option value="{{ b.batch_code }}">{{ b.batch_code }}</option>{% endfor %}
+            </select>
+          </div>
+          <div class="mb-3"><label class="form-label">Section</label><input type="text" name="section" id="edit-section" class="form-control"/></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>Import from Excel</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" action="{{ url_for('import_students') }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="alert alert-success" style="font-size:12px">
+            <i class="bi bi-magic me-1"></i>
+            <strong>Name your file like <code>AY26-30.xlsx</code></strong> — batch will be auto-created!<br>
+            Columns needed: <b>Roll Number</b>, <b>Branch</b>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Excel File *</label>
+            <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required/>
+          </div>
+          <div class="mb-2">
+            <label class="form-label">Or manually select batch <span style="color:#9ca3af">(if filename doesn't have AY format)</span></label>
+            <select name="batch_code" class="form-select">
+              <option value="">Auto-detect from filename</option>
+              {% for b in batches %}<option value="{{ b.batch_code }}">{{ b.batch_code }} ({{ b.current_year_label }})</option>{% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Import</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete All Modal -->
+<div class="modal fade" id="deleteAllModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Clear Students</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <form method="POST" action="{{ url_for('delete_all_students') }}">
+          <p style="font-size:13px">Delete which students?</p>
+          <select name="batch_code" class="form-select mb-3">
+            <option value="">All students (every batch)</option>
+            {% for b in batches %}<option value="{{ b.batch_code }}">Only {{ b.batch_code }} ({{ b.student_count }} students)</option>{% endfor %}
+          </select>
+          <div class="d-flex gap-2">
+            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+            <button type="submit" class="btn btn-danger btn-sm">Delete</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+$('#studentsTable').DataTable({pageLength:25, order:[[3,'asc'],[2,'asc']]});
+document.getElementById('editModal').addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('editForm').action = `/students/edit/${btn.dataset.id}`;
+  document.getElementById('edit-roll').value    = btn.dataset.roll;
+  document.getElementById('edit-branch').value  = btn.dataset.branch;
+  document.getElementById('edit-batch').value   = btn.dataset.batch;
+  document.getElementById('edit-section').value = btn.dataset.section;
+});
+</script>
+{% endblock %}

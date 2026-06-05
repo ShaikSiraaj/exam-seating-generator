@@ -1,0 +1,493 @@
+{% extends 'base.html' %}
+{% block title %}Halls & Blocks{% endblock %}
+{% block page_title %}Halls & Blocks{% endblock %}
+{% block content %}
+
+<style>
+  .block-card {
+    background: #fff;
+    border-radius: 14px;
+    box-shadow: 0 2px 10px rgba(0,0,0,.07);
+    border: 1.5px solid #e2e8f0;
+    transition: box-shadow .2s, border-color .2s;
+    overflow: hidden;
+  }
+  .block-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,.10); }
+  .block-card.expanded { border-color: var(--primary-light); }
+
+  .block-header {
+    display: flex;
+    align-items: center;
+    padding: 18px 20px;
+    cursor: pointer;
+    user-select: none;
+    gap: 14px;
+    background: #fff;
+    transition: background .15s;
+  }
+  .block-header:hover { background: #f8fafc; }
+
+  .block-badge {
+    width: 52px; height: 52px;
+    border-radius: 13px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px; font-weight: 800;
+    color: #fff; flex-shrink: 0;
+  }
+  .block-info { flex: 1; min-width: 0; }
+  .block-info h6 { margin: 0; font-size: 14px; font-weight: 700; color: var(--primary); }
+  .block-info small { font-size: 11px; color: #6b7280; }
+
+  .block-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .block-meta .pill {
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    background: #f0f4f8; color: #374151; font-weight: 600;
+  }
+  .block-meta .pill.active { background: #d1fae5; color: #065f46; }
+
+  .chevron { font-size: 18px; color: #9ca3af; transition: transform .25s; }
+  .expanded .chevron { transform: rotate(180deg); }
+
+  .floors-panel {
+    display: none;
+    border-top: 1.5px solid #e8edf3;
+    background: #f8fafc;
+    padding: 20px;
+  }
+  .block-card.expanded .floors-panel { display: block; }
+
+  .floor-row { margin-bottom: 18px; }
+  .floor-row:last-child { margin-bottom: 0; }
+  .floor-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .8px; color: #6b7280; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .floor-label::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+
+  .rooms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+    gap: 10px;
+  }
+  .room-card {
+    background: #fff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 12px 14px;
+    cursor: pointer;
+    transition: all .15s;
+    position: relative;
+  }
+  .room-card:hover { border-color: var(--primary-light); box-shadow: 0 2px 8px rgba(46,134,171,.15); transform: translateY(-1px); }
+  .room-card.inactive { opacity: .55; background: #f9fafb; }
+  .room-card .room-id { font-size: 16px; font-weight: 700; color: var(--primary); }
+  .room-card .room-name { font-size: 10px; color: #9ca3af; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .room-card .room-stats { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
+  .room-card .room-stat { font-size: 10px; padding: 2px 7px; border-radius: 10px; background: #f0f4f8; color: #374151; }
+  .room-card .active-dot {
+    position: absolute; top: 10px; right: 10px;
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .active-dot.on  { background: #22c55e; }
+  .active-dot.off { background: #d1d5db; }
+  .btn-xs { font-size: 10px !important; padding: 2px 6px !important; border-radius: 5px !important; }
+
+  .add-room-btn {
+    border: 1.5px dashed #cbd5e1;
+    border-radius: 10px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all .15s;
+    background: transparent;
+    width: 100%;
+  }
+  .add-room-btn:hover { border-color: var(--primary-light); color: var(--primary-light); background: #f0f9ff; }
+
+  .bc-0 { background: #1a3c5e; }
+  .bc-1 { background: #2e86ab; }
+  .bc-2 { background: #f18f01; }
+  .bc-3 { background: #c73e1d; }
+  .bc-4 { background: #3b1f8c; }
+  .bc-5 { background: #0a7c59; }
+  .bc-6 { background: #6b21a8; }
+  .bc-7 { background: #0369a1; }
+
+  .summary-bar {
+    background: #fff;
+    border-radius: 12px;
+    padding: 16px 22px;
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,.05);
+    border: 1px solid #e8edf3;
+    margin-bottom: 22px;
+    flex-wrap: wrap;
+  }
+  .summary-item { display: flex; align-items: center; gap: 8px; }
+  .summary-item .val { font-size: 20px; font-weight: 700; color: var(--primary); }
+  .summary-item .lbl { font-size: 11px; color: #6b7280; }
+</style>
+
+<!-- Summary bar -->
+<div class="summary-bar">
+  <div class="summary-item">
+    <i class="bi bi-grid-3x3-gap-fill fs-4 text-primary"></i>
+    <div><div class="val">{{ blocks|length }}</div><div class="lbl">Blocks</div></div>
+  </div>
+  <div class="summary-item">
+    <i class="bi bi-layers fs-4" style="color:var(--accent)"></i>
+    <div><div class="val">{{ blocks|length * 4 }}</div><div class="lbl">Total Floors</div></div>
+  </div>
+  <div class="summary-item">
+    <i class="bi bi-building fs-4" style="color:#2e86ab"></i>
+    <div>
+      <div class="val">{{ total_halls if total_halls else 0 }}</div>
+      <div class="lbl">Total Rooms</div>
+    </div>
+  </div>
+  <div class="summary-item">
+    <i class="bi bi-check-circle-fill fs-4 text-success"></i>
+    <div>
+      <div class="val">
+        {% set active_count = namespace(v=0) %}
+        {% for b in blocks %}{% for h in b.halls %}{% if h.is_active %}{% set active_count.v = active_count.v + 1 %}{% endif %}{% endfor %}{% endfor %}
+        {{ active_count.v }}
+      </div>
+      <div class="lbl">Active Rooms</div>
+    </div>
+  </div>
+  <div class="ms-auto d-flex gap-2">
+    <form method="POST" action="/admin/migrate-halls-6col"
+          onsubmit="return confirm('Update ALL halls with 3 columns to 6 columns? Do this once after upgrade.')">
+      <button type="submit" class="btn btn-warning btn-sm">
+        <i class="bi bi-arrow-repeat me-1"></i>Set All to 6 Cols
+      </button>
+    </form>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBlockModal">
+      <i class="bi bi-plus-lg me-1"></i>Add Block
+    </button>
+  </div>
+</div>
+
+<!-- Blocks list -->
+<div class="d-flex flex-column gap-3" id="blocksList">
+  {% for b in blocks %}
+  {% set ci = loop.index0 % 8 %}
+  <div class="block-card {% if loop.first %}expanded{% endif %}" id="block-{{ b.prefix }}">
+    <!-- Block Header -->
+    <div class="block-header" onclick="toggleBlock('{{ b.prefix }}')">
+      <div class="block-badge bc-{{ ci }}">{{ b.prefix }}</div>
+      <div class="block-info">
+        <h6>{{ b.block_name }}</h6>
+        <small>{{ b.department }} &bull; {{ b.halls|length }} rooms across 4 floors</small>
+      </div>
+      <div class="block-meta">
+        {% set act = namespace(v=0) %}
+        {% for h in b.halls %}{% if h.is_active %}{% set act.v = act.v + 1 %}{% endif %}{% endfor %}
+        <span class="pill active">{{ act.v }} active</span>
+        <span class="pill">Cap: {{ b.halls|sum(attribute='capacity') }}</span>
+        <!-- Edit block -->
+        <button class="btn btn-sm btn-outline-secondary py-0 px-2"
+          onclick="event.stopPropagation()"
+          data-bs-toggle="modal" data-bs-target="#editBlockModal"
+          data-id="{{ b.id }}" data-dept="{{ b.department }}" data-name="{{ b.block_name }}" data-prefix="{{ b.prefix }}">
+          <i class="bi bi-pencil" style="font-size:12px"></i>
+        </button>
+        <!-- Delete block -->
+        <form method="POST" action="{{ url_for('delete_block', bid=b.id) }}" style="display:inline"
+              onsubmit="event.stopPropagation(); return confirm('Delete block {{ b.prefix }} and all its halls?')">
+          <button type="submit" class="btn btn-sm btn-outline-danger py-0 px-2">
+            <i class="bi bi-trash3" style="font-size:12px"></i>
+          </button>
+        </form>
+      </div>
+      <i class="bi bi-chevron-down chevron ms-2"></i>
+    </div>
+
+    <!-- Floors panel -->
+    <div class="floors-panel">
+      {% for floor_num in [1,2,3,4] %}
+      {% set floor_halls = b.floors[floor_num] %}
+      <div class="floor-row">
+        <div class="floor-label">
+          <i class="bi bi-layers me-1"></i>
+          {{ floor_names[floor_num] }}
+          <span style="font-size:10px;color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0">({{ floor_halls|length }} rooms)</span>
+        </div>
+        <div class="rooms-grid">
+          {% for h in floor_halls %}
+          <div class="room-card {% if not h.is_active %}inactive{% endif %}">
+            <span class="active-dot {{ 'on' if h.is_active else 'off' }}"></span>
+            <div class="room-id">{{ h.hall_id }}</div>
+            <div class="room-name">{{ h.hall_name }}</div>
+            <div class="room-stats">
+              <span class="room-stat"><i class="bi bi-grid me-1"></i>{{ h.cols }} cols × {{ h.rows }} rows</span>
+              <span class="room-stat"><i class="bi bi-person me-1"></i>{{ h.capacity }} seats</span>
+            </div>
+            <!-- Quick-action buttons -->
+            <div class="d-flex gap-1 mt-2">
+              <button class="btn btn-xs btn-outline-primary py-0 px-2 flex-fill"
+                style="font-size:10px"
+                onclick="openEditRoom({{ h.id }}, '{{ h.hall_id }}', '{{ h.hall_name }}', '{{ h.block_prefix }}', {{ h.cols }}, {{ h.rows }}, {{ 'true' if h.is_active else 'false' }})">
+                <i class="bi bi-pencil me-1"></i>Edit
+              </button>
+              <form method="POST" action="{{ url_for('delete_hall', hid=h.id) }}" style="display:inline;flex:1"
+                    onsubmit="return confirm('Delete room {{ h.hall_id }}?')">
+                <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-2 w-100"
+                  style="font-size:10px">
+                  <i class="bi bi-trash3 me-1"></i>Delete
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+          <button class="add-room-btn"
+            onclick="openAddRoom('{{ b.prefix }}', {{ floor_num }})"
+            data-bs-toggle="modal" data-bs-target="#addHallModal">
+            <i class="bi bi-plus-circle"></i> Add Room
+          </button>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if not blocks %}
+<div class="text-center py-5">
+  <i class="bi bi-building" style="font-size:48px;color:#d1d5db"></i>
+  <p class="mt-3 text-muted">No blocks yet. Click <strong>Add Block</strong> to get started.</p>
+</div>
+{% endif %}
+
+<!-- ── MODALS ── -->
+
+<!-- Add Block Modal -->
+<div class="modal fade" id="addBlockModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-plus-circle me-2"></i>Add Block</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('add_block') }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Block Prefix *</label>
+            <input type="text" name="prefix" class="form-control" maxlength="3" required placeholder="e.g. F"/>
+            <div class="form-text">Single letter (A–Z). Rooms will be auto-named F101–F104, F201–F204…</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Department *</label>
+            <input type="text" name="department" class="form-control" required placeholder="e.g. IT"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Block Full Name *</label>
+            <input type="text" name="block_name" class="form-control" required placeholder="e.g. F-Block (IT Wing)"/>
+          </div>
+          <div class="alert alert-info py-2 px-3 mb-0" style="font-size:12px">
+            <i class="bi bi-info-circle me-1"></i>
+            <strong>4 floors × 4 rooms</strong> will be auto-created (16 rooms total).
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Create Block</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Block Modal -->
+<div class="modal fade" id="editBlockModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>Edit Block</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" id="editBlockForm">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Block Prefix</label>
+            <input type="text" id="eb-prefix" class="form-control" disabled style="background:#f0f0f0"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Department</label>
+            <input type="text" name="department" id="eb-dept" class="form-control" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Block Full Name</label>
+            <input type="text" name="block_name" id="eb-name" class="form-control" required/>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Add Hall Modal -->
+<div class="modal fade" id="addHallModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-building me-2"></i>Add Room</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" action="{{ url_for('add_hall') }}">
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-4">
+              <label class="form-label">Room ID *</label>
+              <input type="text" name="hall_id" id="ah-id" class="form-control" required placeholder="A105"/>
+            </div>
+            <div class="col-8">
+              <label class="form-label">Room Name *</label>
+              <input type="text" name="hall_name" id="ah-name" class="form-control" required placeholder="Room A105 (1st Floor)"/>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Block *</label>
+              <select name="block_prefix" id="ah-prefix" class="form-select" required>
+                <option value="">Select block</option>
+                {% for b in blocks %}
+                <option value="{{ b.prefix }}">{{ b.prefix }} — {{ b.department }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Columns</label>
+              <input type="number" name="cols" class="form-control" value="6" min="1" max="20"
+                     title="Number of columns in seating layout"/>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Rows</label>
+              <input type="number" name="rows" class="form-control" value="8" min="1" max="50"
+                     title="Number of rows in seating layout"/>
+            </div>
+            <div class="col-12">
+              <div class="alert alert-info py-2 px-3 mb-0" style="font-size:12px">
+                <i class="bi bi-info-circle me-1"></i>
+                Each seat holds <strong>1 student</strong>. Capacity = Columns × Rows.
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-primary btn-sm">Add Room</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Hall Modal -->
+<div class="modal fade" id="editHallModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>Edit Room</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <form method="POST" id="editHallForm">
+        <div class="modal-body">
+          <div class="row g-2">
+            <div class="col-4">
+              <label class="form-label">Room ID</label>
+              <input type="text" id="eh-id" class="form-control" disabled style="background:#f0f0f0"/>
+            </div>
+            <div class="col-8">
+              <label class="form-label">Room Name</label>
+              <input type="text" name="hall_name" id="eh-name" class="form-control"/>
+            </div>
+            <div class="col-12">
+              <label class="form-label">Block</label>
+              <select name="block_prefix" id="eh-prefix" class="form-select">
+                {% for b in blocks %}
+                <option value="{{ b.prefix }}">{{ b.prefix }} — {{ b.department }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Columns <small class="text-muted">(editable)</small></label>
+              <input type="number" name="cols" id="eh-cols" class="form-control" min="1" max="20"/>
+            </div>
+            <div class="col-6">
+              <label class="form-label">Rows <small class="text-muted">(editable)</small></label>
+              <input type="number" name="rows" id="eh-rows" class="form-control" min="1" max="50"/>
+            </div>
+            <div class="col-12 d-flex align-items-center gap-3 mt-1">
+              <div class="form-check">
+                <input class="form-check-input" type="checkbox" name="is_active" id="eh-active"/>
+                <label class="form-check-label form-label mb-0" for="eh-active">Active</label>
+              </div>
+              <small class="text-muted" style="font-size:11px">Each seat = 1 student. Capacity = Cols × Rows</small>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+          <!-- Delete hall button -->
+          <form method="POST" id="deleteHallForm" style="display:inline">
+            <button type="submit" class="btn btn-outline-danger btn-sm"
+              onclick="return confirm('Delete this room permanently?')">
+              <i class="bi bi-trash3 me-1"></i>Delete Hall
+            </button>
+          </form>
+          <button type="submit" form="editHallForm" class="btn btn-primary btn-sm">Save Changes</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script>
+function toggleBlock(prefix) {
+  const card = document.getElementById('block-' + prefix);
+  card.classList.toggle('expanded');
+}
+
+function openAddRoom(prefix, floor) {
+  const roomNum = floor * 100 + 1;
+  document.getElementById('ah-id').value   = prefix + roomNum;
+  document.getElementById('ah-name').value = `Room ${prefix}${roomNum} (Floor ${floor})`;
+  document.getElementById('ah-prefix').value = prefix;
+}
+
+function openEditRoom(id, hallId, hallName, prefix, cols, rows, isActive) {
+  document.getElementById('editHallForm').action   = `/halls/edit/${id}`;
+  document.getElementById('deleteHallForm').action = `/halls/delete/${id}`;
+  document.getElementById('eh-id').value     = hallId;
+  document.getElementById('eh-name').value   = hallName;
+  document.getElementById('eh-prefix').value = prefix;
+  document.getElementById('eh-cols').value   = cols;
+  document.getElementById('eh-rows').value   = rows;
+  document.getElementById('eh-active').checked = isActive;
+  new bootstrap.Modal(document.getElementById('editHallModal')).show();
+}
+
+document.getElementById('editBlockModal').addEventListener('show.bs.modal', function(e) {
+  const b = e.relatedTarget;
+  document.getElementById('editBlockForm').action = `/blocks/edit/${b.dataset.id}`;
+  document.getElementById('eb-prefix').value = b.dataset.prefix;
+  document.getElementById('eb-dept').value   = b.dataset.dept;
+  document.getElementById('eb-name').value   = b.dataset.name;
+});
+</script>
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends 'base.html' %}
+{% block title %}Faculty{% endblock %}
+{% block page_title %}Faculty{% endblock %}
+{% block content %}
+<div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-center gap-3 mb-3">
+  <p class="page-subtitle mb-0">Manage faculty — add, edit, delete or import from Excel</p>
+  <div class="d-flex gap-2">
+    <button class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#importModal"><i class="bi bi-file-earmark-excel me-1"></i>Import Excel</button>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addModal"><i class="bi bi-plus-lg me-1"></i>Add Faculty</button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-person-badge-fill me-2"></i>All Faculty ({{ faculty|length }})</div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table id="facTable" class="table table-hover">
+        <thead><tr><th>#</th><th>Name</th><th>Faculty ID</th><th>Department</th><th>Contact</th><th>Status</th><th>Actions</th></tr></thead>
+      <tbody>
+        {% for f in faculty %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td><strong>{{ f.name }}</strong></td>
+          <td><code style="font-size:12px">{{ f.faculty_id }}</code></td>
+          <td>{{ f.department or '—' }}</td>
+          <td>{{ f.contact or '—' }}</td>
+          <td><span class="badge {{ 'bg-success' if f.is_active else 'bg-secondary' }}">{{ 'Active' if f.is_active else 'Inactive' }}</span></td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary py-0 px-2" style="font-size:11px" data-bs-toggle="modal" data-bs-target="#editModal"
+              data-id="{{ f.id }}" data-name="{{ f.name }}" data-fid="{{ f.faculty_id }}" data-contact="{{ f.contact }}" data-dept="{{ f.department }}">
+              <i class="bi bi-pencil"></i>
+            </button>
+            <button class="btn btn-sm btn-outline-danger py-0 px-2" style="font-size:11px" data-bs-toggle="modal" data-bs-target="#deleteModal"
+              data-id="{{ f.id }}" data-name="{{ f.name }}">
+              <i class="bi bi-trash3"></i>
+            </button>
+          </td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Add Modal -->
+<div class="modal fade" id="addModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-person-plus-fill me-2"></i>Add Faculty</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" action="{{ url_for('add_faculty') }}">
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Full Name *</label><input type="text" name="name" class="form-control" required placeholder="Dr. Ravi Kumar"/></div>
+          <div class="mb-3"><label class="form-label">Faculty ID *</label><input type="text" name="faculty_id" class="form-control" required placeholder="F001"/></div>
+          <div class="mb-3"><label class="form-label">Department</label><input type="text" name="department" class="form-control" placeholder="CSE"/></div>
+          <div class="mb-3"><label class="form-label">Contact</label><input type="text" name="contact" class="form-control" placeholder="9876543210"/></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm">Add Faculty</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal fade" id="editModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-pencil-fill me-2"></i>Edit Faculty</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" id="editForm">
+        <div class="modal-body">
+          <div class="mb-3"><label class="form-label">Full Name *</label><input type="text" name="name" id="e-name" class="form-control" required/></div>
+          <div class="mb-3"><label class="form-label">Faculty ID *</label><input type="text" name="faculty_id" id="e-fid" class="form-control" required/></div>
+          <div class="mb-3"><label class="form-label">Department</label><input type="text" name="department" id="e-dept" class="form-control"/></div>
+          <div class="mb-3"><label class="form-label">Contact</label><input type="text" name="contact" id="e-contact" class="form-control"/></div>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm">Save</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Delete Faculty</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body"><p style="font-size:13px">Delete <strong id="d-name"></strong>?</p></div>
+      <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><form method="POST" id="deleteForm"><button type="submit" class="btn btn-danger btn-sm">Delete</button></form></div>
+    </div>
+  </div>
+</div>
+
+<!-- Import Modal -->
+<div class="modal fade" id="importModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title"><i class="bi bi-file-earmark-excel me-2"></i>Import Faculty from Excel</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <form method="POST" action="{{ url_for('import_faculty') }}" enctype="multipart/form-data">
+        <div class="modal-body">
+          <div class="alert alert-info" style="font-size:12px"><i class="bi bi-info-circle me-1"></i>Columns: <b>Name</b>, <b>Faculty ID</b>, <b>Contact</b> (and optionally <b>Department</b>)</div>
+          <input type="file" name="excel_file" class="form-control" accept=".xlsx,.xls" required/>
+        </div>
+        <div class="modal-footer"><button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button><button type="submit" class="btn btn-primary btn-sm"><i class="bi bi-upload me-1"></i>Import</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+$('#facTable').DataTable({pageLength:25});
+document.getElementById('editModal').addEventListener('show.bs.modal', function(e) {
+  const b = e.relatedTarget;
+  document.getElementById('editForm').action = `/faculty/edit/${b.dataset.id}`;
+  document.getElementById('e-name').value    = b.dataset.name;
+  document.getElementById('e-fid').value     = b.dataset.fid;
+  document.getElementById('e-contact').value = b.dataset.contact;
+  document.getElementById('e-dept').value    = b.dataset.dept;
+});
+document.getElementById('deleteModal').addEventListener('show.bs.modal', function(e) {
+  const b = e.relatedTarget;
+  document.getElementById('d-name').textContent = b.dataset.name;
+  document.getElementById('deleteForm').action  = `/faculty/delete/${b.dataset.id}`;
+});
+</script>
+{% endblock %}
