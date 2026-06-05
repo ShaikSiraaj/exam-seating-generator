@@ -173,6 +173,13 @@ def draw_dept_summary(c, dept_info, dept_halls, hall_faculty, by_hall, exam_info
     c.setFont("Helvetica-Bold", 8.5)
     for hdr, xp in zip(headers, xs):
         c.drawString(xp + 0.12*cm, y - rh*0.65, hdr)
+    # Vertical lines in header (white on black)
+    c.setStrokeColor(WHITE)
+    c.setLineWidth(0.4)
+    for xp in xs[1:]:
+        c.line(xp, y, xp, y - rh)
+    c.line(MARGIN_L, y, MARGIN_L, y - rh)
+    c.line(MARGIN_L + sum(col_w), y, MARGIN_L + sum(col_w), y - rh)
     c.setFillColor(BLACK)
     y -= rh
 
@@ -187,7 +194,14 @@ def draw_dept_summary(c, dept_info, dept_halls, hall_faculty, by_hall, exam_info
 
         c.setStrokeColor(BLACK)
         c.setLineWidth(0.3)
+        # Horizontal top line
         c.line(MARGIN_L, y, MARGIN_L + sum(col_w), y)
+        # Vertical column lines
+        for xp in xs[1:]:
+            c.line(xp, y, xp, y - rh)
+        # Left and right borders
+        c.line(MARGIN_L, y, MARGIN_L, y - rh)
+        c.line(MARGIN_L + sum(col_w), y, MARGIN_L + sum(col_w), y - rh)
 
         c.setFont("Helvetica-Bold", 8)
         c.drawString(xs[0]+0.12*cm, y-rh*0.65, hid)
@@ -206,6 +220,13 @@ def draw_dept_summary(c, dept_info, dept_halls, hall_faculty, by_hall, exam_info
     c.setFont("Helvetica-Bold", 9)
     c.drawString(xs[0]+0.12*cm, y-rh*0.65, "TOTAL")
     c.drawString(xs[2]+0.12*cm, y-rh*0.65, str(total))
+    # Vertical lines in total row (white on black)
+    c.setStrokeColor(WHITE)
+    c.setLineWidth(0.4)
+    for xp in xs[1:]:
+        c.line(xp, y, xp, y - rh)
+    c.line(MARGIN_L, y, MARGIN_L, y - rh)
+    c.line(MARGIN_L + sum(col_w), y, MARGIN_L + sum(col_w), y - rh)
     c.setFillColor(BLACK)
     # Bottom closing line
     c.setStrokeColor(BLACK)
@@ -294,6 +315,13 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         c.drawString(xs[2] + 0.1*cm, y_pos - row_h*0.65, "Total")
         for i, br in enumerate(all_branches):
             c.drawString(xs[3 + i] + 0.1*cm, y_pos - row_h*0.65, br)
+        # Vertical lines inside header
+        c.setStrokeColor(WHITE)
+        c.setLineWidth(0.4)
+        for x_line in xs[1:]:
+            c.line(x_line, y_pos, x_line, y_pos - row_h)
+        # Right border
+        c.line(MARGIN_L + total_w, y_pos, MARGIN_L + total_w, y_pos - row_h)
         c.setFillColor(BLACK)
         return y_pos - row_h
 
@@ -318,9 +346,17 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
             grand_branch[br] += cnt
 
         # Draw only top horizontal line per row (cleaner look)
+                # Horizontal top line
         c.setStrokeColor(BLACK)
         c.setLineWidth(0.3)
         c.line(MARGIN_L, y, MARGIN_L + total_w, y)
+        # Vertical column lines
+        c.setLineWidth(0.3)
+        for x_line in xs[1:]:
+            c.line(x_line, y, x_line, y - row_h)
+        # Left and right border verticals
+        c.line(MARGIN_L, y, MARGIN_L, y - row_h)
+        c.line(MARGIN_L + total_w, y, MARGIN_L + total_w, y - row_h)
 
         # Room ID — bold
         c.setFont("Helvetica-Bold", 7)
@@ -371,6 +407,13 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     for i, br in enumerate(all_branches):
         cnt = grand_branch.get(br, 0)
         c.drawString(xs[3 + i] + 0.1*cm, y - row_h*0.65, str(cnt) if cnt else "-")
+    # Vertical lines in grand total row (white so visible on black)
+    c.setStrokeColor(WHITE)
+    c.setLineWidth(0.4)
+    for x_line in xs[1:]:
+        c.line(x_line, y, x_line, y - row_h)
+    c.line(MARGIN_L, y, MARGIN_L, y - row_h)
+    c.line(MARGIN_L + total_w, y, MARGIN_L + total_w, y - row_h)
     c.setFillColor(BLACK)
     # Bottom closing line
     c.setStrokeColor(BLACK)
