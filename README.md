@@ -23,3 +23,15 @@ PDF Generation
 📄 Page 2+ — Department summaries with invigilator list
 📄 Remaining pages — Hall-wise seating grid (roll number + branch abbreviation per cell)
 🖨️ Matches university reference format with college logo header
+Branch Abbreviations (auto-detected from DB)
+Full Name                      Shown As
+Chemical Engineering            CHE     
+Civil Engineering               Civil
+Computer Science&AIM            CSM
+ComputerDataScience             CSD
+ComputerScience & Engineering   CSE
+Electrical & Engineering        EEE
+Electronics & Communication Eng ECE
+Information Technology          IT 
+Mechanical Engineering          MECH 
+MBA (HA)                        MBA
