@@ -1,17 +1,15 @@
-# Exam Seating Portal
+🎓 Exam Seating Portal
 
-Full-stack university admin portal for exam seating allocation.
+A full-stack university admin portal for automated exam seating plan generation, PDF export, and supplementary exam management.
 
-## Features
-- University admin portal UI (sidebar, dashboard, datatables)
-- SQLite database — students, faculty, halls, exams, history
-- Full CRUD for students, faculty, halls & blocks from UI
-- Excel import for students and faculty
-- Branch interleaving — no same branch side by side
-- 2 students per bench, 2-3 faculty per hall (randomly assigned)
-- Tracks seat/hall history across exams (max 2 repeats)
-- PDF report matching university reference format
 
+✨ Features
+Core
+
+🏛️ Clean admin portal UI — sidebar navigation, dashboard with live stats and charts
+🗃️ SQLite database — students, faculty, halls, blocks, exams, seating history
+📋 Full CRUD for students, faculty, halls and blocks directly from the UI
+📥 Excel import for bulk student and faculty upload
 ## How to Run
 
 ```bash
