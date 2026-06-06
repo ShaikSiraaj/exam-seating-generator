@@ -10,50 +10,16 @@ Core
 🗃️ SQLite database — students, faculty, halls, blocks, exams, seating history
 📋 Full CRUD for students, faculty, halls and blocks directly from the UI
 📥 Excel import for bulk student and faculty upload
-## How to Run
+Seating Algorithm
 
-```bash
-cd exam-portal
-python -m venv venv
+🔀 Branch interleaving — no two students from the same branch sit side by side
+🪑 1 student per seat, 6 columns × 8 rows per hall (configurable per hall)
+👨‍🏫 2–3 faculty randomly assigned per hall as invigilators
+📊 Tracks seating history across exams
 
-# Windows
-venv\Scripts\activate
-# Mac/Linux
-source venv/bin/activate
+PDF Generation
 
-pip install -r requirements.txt
-python app.py
-```
-
-Open: **http://127.0.0.1:5000**
-
-## Excel Format
-
-**Students:** `Roll Number`, `Branch` (+ optional `Year`, `Section`)
-**Faculty:** `Name`, `Faculty ID`, `Contact` (+ optional `Department`)
-
-Any column name variant is accepted automatically.
-
-## Project Structure
-
-```
-exam-portal/
-├── app.py            # Flask app + all routes
-├── models.py         # SQLAlchemy DB models
-├── algorithm.py      # Seating + faculty assignment logic
-├── pdf_generator.py  # PDF generation (reference format)
-├── requirements.txt
-├── templates/
-│   ├── base.html       # Sidebar layout
-│   ├── dashboard.html  # Stats + charts
-│   ├── students.html   # Student CRUD
-│   ├── faculty.html    # Faculty CRUD
-│   ├── halls.html      # Halls + blocks CRUD
-│   ├── generate.html   # Generate exam plan
-│   ├── exams.html      # Exam history
-│   └── exam_detail.html# Hall-wise seating view
-├── instance/
-│   └── exam_seating.db # SQLite DB (auto-created)
-├── uploads/            # Temp Excel files
-└── outputs/            # Generated PDFs
-```
+📄 Page 1 — Master Summary: every room with branch-wise student count breakdown
+📄 Page 2+ — Department summaries with invigilator list
+📄 Remaining pages — Hall-wise seating grid (roll number + branch abbreviation per cell)
+🖨️ Matches university reference format with college logo header
