@@ -11,6 +11,12 @@ class Batch(db.Model):
     passout_year  = db.Column(db.Integer, nullable=False)   # 2030
     students      = db.relationship('Student', backref='batch', lazy=True, cascade='all, delete-orphan')
 
+    @property
+    def current_year_label(self):
+        current = datetime.utcnow().year
+        diff = current - self.join_year + 1
+        labels = {1: '1st Year', 2: '2nd Year', 3: '3rd Year', 4: '4th Year'}
+        return labels.get(diff, f'Year {diff}')
 
     @property
     def student_count(self):
