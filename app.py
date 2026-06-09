@@ -95,27 +95,6 @@ def parse_excel_students(file, batch_code=None):
             })
     return students
 
-def parse_excel_faculty(file):
-    path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-    file.save(path)
-    df = pd.read_excel(path)
-    df.columns = [str(c).strip().lower().replace(' ','_') for c in df.columns]
-    cols = list(df.columns)
-    name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
-    id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
-    contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
-    dept_col    = find_col(cols, ['dept','department'])
-    facs = []
-    for _, row in df.iterrows():
-        name = str(row[name_col]).strip()
-        if name and name.lower() not in ('nan','none',''):
-            facs.append({
-                'name': name,
-                'faculty_id': str(row[id_col]).strip(),
-                'contact': str(row[contact_col]).strip(),
-                'department': str(row[dept_col]).strip() if dept_col else ''
-            })
-    return facs
 
 def make_pdf_filename(exam_date, exam_name=None, batch_code=None):
     safe_date = exam_date.replace('/', '-').replace(' ', '_')
