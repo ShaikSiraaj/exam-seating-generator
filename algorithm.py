@@ -2,7 +2,6 @@ import random
 from collections import defaultdict
 from models import SeatingHistory, db
 
-
 def get_student_history(roll_number):
     records = SeatingHistory.query.filter_by(roll_number=roll_number).all()
     halls = defaultdict(int)
@@ -12,7 +11,6 @@ def get_student_history(roll_number):
         seat_key = f"{r.hall_id}_c{r.col}_r{r.row}"
         seats[seat_key] += 1
     return halls, seats
-
 
 def interleave_by_branch(students):
     """
