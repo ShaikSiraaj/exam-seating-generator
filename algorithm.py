@@ -110,10 +110,7 @@ def assign_seats(students, halls, exam_id):
     if not students or not halls:
         return []
 
-    # Step 1: Interleave by branch
     interleaved_all = interleave_by_branch(students)
-
-    # Step 2: Distribute to halls (1 student per seat)
     hall_buckets = snake_distribute(interleaved_all, halls)
 
     assignments = []
