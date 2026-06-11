@@ -87,6 +87,91 @@
 </head>
 <body>
 
+<!-- ── Upload Loading Overlay ── -->
+<div id="uploadOverlay" style="
+  display:none; position:fixed; inset:0; z-index:9999;
+  background:rgba(15,23,42,0.55); backdrop-filter:blur(3px);
+  align-items:center; justify-content:center; flex-direction:column; gap:16px;
+">
+  <div style="
+    background:#fff; border-radius:16px; padding:32px 40px;
+    text-align:center; box-shadow:0 20px 60px rgba(0,0,0,0.3);
+    min-width:260px;
+  ">
+    <!-- Spinner -->
+    <div style="display:flex;justify-content:center;margin-bottom:18px;">
+      <div style="
+        width:52px; height:52px; border-radius:50%;
+        border:5px solid #e2e8f0;
+        border-top-color: var(--primary, #2e86ab);
+        animation: spin 0.85s linear infinite;
+      "></div>
+    </div>
+    <!-- Excel icon + filename -->
+    <div style="font-size:28px;margin-bottom:8px;">📊</div>
+    <div style="font-weight:700;font-size:15px;color:#1e293b;margin-bottom:4px;">
+      Uploading Excel File…
+    </div>
+    <div id="uploadFileName" style="font-size:12px;color:#64748b;margin-bottom:16px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+    <!-- Progress bar -->
+    <div style="background:#e2e8f0;border-radius:99px;height:6px;overflow:hidden;margin-bottom:12px;">
+      <div id="uploadProgressBar" style="
+        height:100%; width:0%; border-radius:99px;
+        background: linear-gradient(90deg, var(--primary,#2e86ab), #38bdf8);
+        transition: width 0.3s ease;
+        animation: progressPulse 1.5s ease-in-out infinite;
+      "></div>
+    </div>
+    <div style="font-size:11px;color:#94a3b8;">Please wait, do not close this page</div>
+  </div>
+</div>
+
+<style>
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes progressPulse {
+  0%   { width: 15%; }
+  50%  { width: 75%; }
+  100% { width: 15%; }
+}
+</style>
+
+<script>
+(function () {
+  // Attach to every form that has a file input accepting .xlsx/.xls
+  document.querySelectorAll('form[enctype="multipart/form-data"]').forEach(function (form) {
+    var fileInput = form.querySelector('input[type="file"]');
+    if (!fileInput) return;
+
+    form.addEventListener('submit', function () {
+      var overlay = document.getElementById('uploadOverlay');
+      var nameEl  = document.getElementById('uploadFileName');
+      var barEl   = document.getElementById('uploadProgressBar');
+
+      // Show filename
+      var fname = fileInput.files && fileInput.files[0] ? fileInput.files[0].name : 'your file';
+      nameEl.textContent = fname;
+
+      // Show overlay
+      overlay.style.display = 'flex';
+
+      // Animate bar to ~90% quickly, then slow down (real upload is server-side)
+      var pct = 0;
+      var interval = setInterval(function () {
+        if (pct < 85) {
+          pct += Math.random() * 8;
+          barEl.style.animation = 'none';
+          barEl.style.width = Math.min(pct, 85) + '%';
+        } else {
+          clearInterval(interval);
+        }
+      }, 300);
+    });
+  });
+})();
+</script>
+
 <!-- Sidebar Backdrop -->
 <div id="sidebarBackdrop" class="modal-backdrop fade show d-none" style="z-index: 1040;"></div>
 
