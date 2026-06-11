@@ -481,6 +481,11 @@ function openEditRoom(id, hallId, hallName, prefix, cols, rows, isActive) {
   new bootstrap.Modal(document.getElementById('editHallModal')).show();
 }
 
+function submitDeleteHall() {
+  if (!confirm('Delete this room permanently?')) return;
+  document.getElementById('deleteHallForm').submit();
+}
+
 document.getElementById('editBlockModal').addEventListener('show.bs.modal', function(e) {
   const b = e.relatedTarget;
   document.getElementById('editBlockForm').action = `/blocks/edit/${b.dataset.id}`;
