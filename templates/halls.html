@@ -441,16 +441,15 @@
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
-          <!-- Delete hall button -->
-          <form method="POST" id="deleteHallForm" style="display:inline">
-            <button type="submit" class="btn btn-outline-danger btn-sm"
-              onclick="return confirm('Delete this room permanently?')">
-              <i class="bi bi-trash3 me-1"></i>Delete Hall
-            </button>
-          </form>
+          <button type="button" class="btn btn-outline-danger btn-sm"
+            onclick="submitDeleteHall()">
+            <i class="bi bi-trash3 me-1"></i>Delete Hall
+          </button>
           <button type="submit" form="editHallForm" class="btn btn-primary btn-sm">Save Changes</button>
         </div>
       </form>
+      <!-- Delete form lives OUTSIDE the edit form -->
+      <form method="POST" id="deleteHallForm" style="display:none"></form>
     </div>
   </div>
 </div>
