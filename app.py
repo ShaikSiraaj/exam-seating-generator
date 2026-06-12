@@ -296,7 +296,13 @@ def edit_faculty(fid):
     db.session.commit()
     flash('Faculty updated.', 'success')
     return redirect(url_for('faculty'))
-
+@app.route('/faculty/delete-all', methods=['POST'])
+def delete_all_faculty():
+    Faculty.query.delete()
+    db.session.commit()
+    flash('All faculty deleted successfully.', 'success')
+    return redirect(url_for('faculty'))
+    
 @app.route('/faculty/delete/<int:fid>', methods=['POST'])
 def delete_faculty(fid):
     db.session.delete(Faculty.query.get_or_404(fid))
