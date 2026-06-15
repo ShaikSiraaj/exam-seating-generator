@@ -176,13 +176,6 @@
   <a href="{{ url_for('exams') }}" class="nav-link {% if request.endpoint in ['exams','exam_detail'] %}active{% endif %}">
     <i class="bi bi-journal-text"></i> Exam History
   </a>
-  <div class="nav-section">Results</div>
-  <a href="{{ url_for('results') }}" class="nav-link {% if request.endpoint in ['results','result_semester'] %}active{% endif %}">
-    <i class="bi bi-bar-chart-fill"></i> Manage Results
-  </a>
-  <a href="{{ url_for('student_results') }}" class="nav-link {% if request.endpoint=='student_results' %}active{% endif %}" target="_blank">
-    <i class="bi bi-search"></i> Student Portal
-  </a>
 </div>
 
 <!-- Main -->
