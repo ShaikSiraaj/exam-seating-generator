@@ -114,31 +114,3 @@ class SeatingHistory(db.Model):
     row           = db.Column(db.Integer, nullable=False)
     faculty_assigned = db.Column(db.String(255), nullable=True)
 
-class ResultSemester(db.Model):
-    __tablename__ = 'result_semesters'
-    id           = db.Column(db.Integer, primary_key=True)
-    name         = db.Column(db.String(100), nullable=False)
-    year         = db.Column(db.String(20), nullable=False)
-    regulation   = db.Column(db.String(20), nullable=True)
-    declared_on  = db.Column(db.String(30), nullable=True)
-    is_published = db.Column(db.Boolean, default=False)
-    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
-    results      = db.relationship('Result', backref='semester', lazy=True, cascade='all, delete-orphan')
-
-class Result(db.Model):
-    __tablename__ = 'results'
-    id             = db.Column(db.Integer, primary_key=True)
-    semester_id    = db.Column(db.Integer, db.ForeignKey('result_semesters.id'), nullable=False)
-    roll_number    = db.Column(db.String(50), nullable=False)
-    student_name   = db.Column(db.String(150), nullable=True)
-    subject_code   = db.Column(db.String(30), nullable=False)
-    subject_name   = db.Column(db.String(150), nullable=False)
-    internal_marks = db.Column(db.Float, nullable=True)
-    external_marks = db.Column(db.Float, nullable=True)
-    total_marks    = db.Column(db.Float, nullable=True)
-    max_marks      = db.Column(db.Float, default=100)
-    grade          = db.Column(db.String(5), nullable=True)
-    grade_points   = db.Column(db.Float, nullable=True)
-    credits        = db.Column(db.Integer, nullable=True)
-    status         = db.Column(db.String(10), default='PASS')
-    created_at     = db.Column(db.DateTime, default=datetime.utcnow)

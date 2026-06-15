@@ -99,8 +99,6 @@ exam-seating-generator/
 │   ├── bulk_generate.html    # Bulk generate (6 exams at once)
 │   ├── exams.html            # Exam history list
 │   ├── exam_detail.html      # Hall-wise seating grid view
-│   ├── results.html          # Manage results
-│   ├── student_results.html  # Student-facing results portal
 │   └── supply/
 │       ├── supply_list.html      # All supplementary exams
 │       ├── supply_create.html    # Step 1 — exam details
