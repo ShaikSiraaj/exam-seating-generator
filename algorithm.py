@@ -69,49 +69,116 @@ def interleave_by_branch(students):
     return result
 
 
+def checkerboard_capacity(cols, rows):
+    """
+    Number of usable seats in a hall when seating in a checkerboard
+    (alternate-seat) pattern: every other seat in every row, offset
+    row to row, so no two filled seats touch left-right or front-back.
+    """
+    count = 0
+    for col in range(1, cols + 1):
+        for row in range(1, rows + 1):
+            if (col + row) % 2 == 0:
+                count += 1
+    return count
+
+
+def checkerboard_slots(cols, rows):
+    """
+    Seat slots usable under the checkerboard pattern, in column-by-column,
+    row-by-row order. Only positions where (col + row) is even are filled.
+    """
+    slots = []
+    for col in range(1, cols + 1):
+        for row in range(1, rows + 1):
+            if (col + row) % 2 == 0:
+                seat_no = (col - 1) * rows + row
+                slots.append({'seat_no': seat_no, 'col': col, 'row': row})
+    return slots
+
+
+def full_slots(cols, rows):
+    """
+    Every seat in the hall, column by column, row by row.
+    """
+    slots = []
+    for col in range(1, cols + 1):
+        for row in range(1, rows + 1):
+            seat_no = (col - 1) * rows + row
+            slots.append({'seat_no': seat_no, 'col': col, 'row': row})
+    return slots
+
+
 def snake_distribute(students, halls):
     """
-    Fill each hall completely before moving to next.
-    Capacity = cols * rows (1 student per seat).
+    Fill each hall before moving to the next.
+
+    Normal case: capacity = cols * rows (1 student per seat), filled
+    consecutively, since interleave_by_branch() already keeps same-branch
+    students from sitting next to each other.
+
+    Single-branch case: if the next block of students destined for a hall
+    all belong to the same branch (no other branch left to interleave
+    with), that hall is seated in a checkerboard pattern instead — every
+    other seat, offset row to row — so same-branch students still never
+    sit adjacent. This halves the usable capacity for that hall, so any
+    overflow is pushed on to the next hall.
+
+    Returns (hall_buckets, single_branch_halls) where single_branch_halls
+    is the set of hall_ids that were seated in checkerboard mode.
     """
     if not halls or not students:
-        return {h['hall_id']: [] for h in halls}
-
-    hall_capacities = {}
-    for hall in halls:
-        cols = hall.get('cols', 6)
-        rows = hall.get('rows', 8)
-        hall_capacities[hall['hall_id']] = cols * rows  # 1 student per seat
+        return {h['hall_id']: [] for h in halls}, set()
 
     hall_ids     = [h['hall_id'] for h in halls]
     hall_buckets = {hid: [] for hid in hall_ids}
+    single_branch_halls = set()
 
     student_index = 0
     total         = len(students)
 
-    for hall_id in hall_ids:
+    for hall in halls:
+        hall_id = hall['hall_id']
         if student_index >= total:
             break
-        cap = hall_capacities[hall_id]
-        while student_index < total and len(hall_buckets[hall_id]) < cap:
-            hall_buckets[hall_id].append(students[student_index])
-            student_index += 1
 
-    return hall_buckets
+        cols = hall.get('cols', 6)
+        rows = hall.get('rows', 8)
+        full_cap = cols * rows
+
+        # Peek at the next full-capacity-sized block to see whether it's
+        # made up of a single branch (no mixing possible) or several.
+        window = students[student_index:student_index + full_cap]
+        branches_in_window = {s['branch'] for s in window}
+
+        if len(branches_in_window) == 1:
+            cap = checkerboard_capacity(cols, rows)
+            single_branch_halls.add(hall_id)
+        else:
+            cap = full_cap
+
+        bucket = students[student_index:student_index + cap]
+        hall_buckets[hall_id] = bucket
+        student_index += len(bucket)
+
+    return hall_buckets, single_branch_halls
 
 
 def assign_seats(students, halls, exam_id):
     """
     Main pipeline:
     1. Interleave all students by branch.
-    2. Snake distribute — fill each hall completely.
-    3. Assign one student per seat, column by column, row by row.
+    2. Snake distribute — fill each hall completely (or to checkerboard
+       capacity if a hall would otherwise be single-branch).
+    3. Assign one student per seat, column by column, row by row —
+       using every seat for mixed-branch halls, or only the checkerboard
+       seats (with the rest left VACANT) for single-branch halls.
     """
     if not students or not halls:
         return []
 
     interleaved_all = interleave_by_branch(students)
-    hall_buckets = snake_distribute(interleaved_all, halls)
+    hall_buckets, single_branch_halls = snake_distribute(interleaved_all, halls)
 
     assignments = []
 
@@ -124,14 +191,11 @@ def assign_seats(students, halls, exam_id):
         if not bucket:
             continue
 
-        # Build seat slots: column by column, row by row
-        slots = []
-        for col in range(1, cols + 1):
-            for row in range(1, rows + 1):
-                seat_no = (col - 1) * rows + row
-                slots.append({'seat_no': seat_no, 'col': col, 'row': row})
+        if hall_id in single_branch_halls:
+            slots = checkerboard_slots(cols, rows)
+        else:
+            slots = full_slots(cols, rows)
 
-        # Assign 1 student per slot
         for i, student in enumerate(bucket):
             if i >= len(slots):
                 break
@@ -145,6 +209,7 @@ def assign_seats(students, halls, exam_id):
                 'seat_pos': 1,                  # always 1 (single occupancy)
                 'col':      slot['col'],
                 'row':      slot['row'],
+                'checkerboard': hall_id in single_branch_halls,
             })
 
     return assignments
