@@ -133,6 +133,7 @@ exam-seating-generator/
 | Name | ✅ | `name`, `faculty_name`, `staff_name` |
 | Faculty ID | ✅ | `faculty_id`, `fid`, `emp_id`, `employee_id` |
 | Contact | ❌ | `contact`, `phone`, `mobile` |
+| Email | ❌ | `email`, `mail` |
 | Department | ❌ | `department`, `dept` |
 
 > Any column name variant is accepted automatically — no strict formatting required.

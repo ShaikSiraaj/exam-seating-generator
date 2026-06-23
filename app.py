@@ -1,4 +1,8 @@
-import os, uuid, re
+import os, uuid, re, smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory
 from algorithm import assign_seats, assign_faculty
@@ -17,6 +21,14 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['UPLOAD_FOLDER'] = os.path.join(BASE_DIR, 'uploads')
 app.config['OUTPUT_FOLDER'] = os.path.join(BASE_DIR, 'outputs')
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024
+
+# Email Configurations
+app.config['MAIL_SERVER'] = os.environ.get('MAIL_SERVER', 'smtp.gmail.com')
+app.config['MAIL_PORT'] = int(os.environ.get('MAIL_PORT', 587))
+app.config['MAIL_USE_TLS'] = os.environ.get('MAIL_USE_TLS', 'True') == 'True'
+app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
+app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
+app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER')
 
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(app.config['OUTPUT_FOLDER'], exist_ok=True)
@@ -104,6 +116,7 @@ def parse_excel_faculty(file):
     name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
     id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
     contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
+    email_col   = find_col(cols, ['email','mail','email_address'])
     dept_col    = find_col(cols, ['dept','department'])
     facs = []
     for _, row in df.iterrows():
@@ -113,9 +126,40 @@ def parse_excel_faculty(file):
                 'name': name,
                 'faculty_id': str(row[id_col]).strip(),
                 'contact': str(row[contact_col]).strip(),
+                'email': str(row[email_col]).strip() if email_col else '',
                 'department': str(row[dept_col]).strip() if dept_col else ''
             })
     return facs
+
+def send_exam_email(recipient_email, subject, body, attachment_path):
+    if not app.config['MAIL_USERNAME'] or not app.config['MAIL_PASSWORD']:
+        print("Email credentials not configured.")
+        return False
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = app.config['MAIL_DEFAULT_SENDER'] or app.config['MAIL_USERNAME']
+        msg['To'] = recipient_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        filename = os.path.basename(attachment_path)
+        with open(attachment_path, "rb") as attachment:
+            part = MIMEBase("application", "octet-stream")
+            part.set_payload(attachment.read())
+            encoders.encode_base64(part)
+            part.add_header("Content-Disposition", f"attachment; filename= {filename}")
+            msg.attach(part)
+
+        server = smtplib.SMTP(app.config['MAIL_SERVER'], app.config['MAIL_PORT'])
+        if app.config['MAIL_USE_TLS']:
+            server.starttls()
+        server.login(app.config['MAIL_USERNAME'], app.config['MAIL_PASSWORD'])
+        server.send_message(msg)
+        server.quit()
+        return True
+    except Exception as e:
+        print(f"Failed to send email to {recipient_email}: {e}")
+        return False
 
 def make_pdf_filename(exam_date, exam_name=None, batch_code=None):
     safe_date = exam_date.replace('/', '-').replace(' ', '_')
@@ -281,6 +325,7 @@ def add_faculty():
         return redirect(url_for('faculty'))
     db.session.add(Faculty(name=name, faculty_id=fid,
                            contact=request.form.get('contact',''),
+                           email=request.form.get('email',''),
                            department=request.form.get('department','')))
     db.session.commit()
     flash(f'{name} added.', 'success')
@@ -292,6 +337,7 @@ def edit_faculty(fid):
     f.name       = request.form.get('name', f.name).strip()
     f.faculty_id = request.form.get('faculty_id', f.faculty_id).strip()
     f.contact    = request.form.get('contact', f.contact)
+    f.email      = request.form.get('email', f.email)
     f.department = request.form.get('department', f.department)
     db.session.commit()
     flash('Faculty updated.', 'success')
@@ -322,7 +368,9 @@ def import_faculty():
         for r in rows:
             if not Faculty.query.filter_by(faculty_id=r['faculty_id']).first():
                 db.session.add(Faculty(name=r['name'], faculty_id=r['faculty_id'],
-                                       contact=r.get('contact',''), department=r.get('department','')))
+                                       contact=r.get('contact',''),
+                                       email=r.get('email',''),
+                                       department=r.get('department','')))
                 added += 1
             else:
                 skipped += 1
@@ -451,7 +499,7 @@ def generate():
             flash('No students found. Check batch selection.', 'danger')
             return redirect(url_for('generate'))
 
-        faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact}
+        faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact, 'email': f.email}
                         for f in Faculty.query.filter_by(is_active=True).all()]
         if not faculty_list:
             flash('No faculty in database.', 'danger')
@@ -491,7 +539,17 @@ def generate():
         exam_obj.pdf_filename = pdf_filename
         db.session.commit()
 
-        flash(f'Seating plan generated for {len(assignments)} students!', 'success')
+        # Send emails to faculty
+        sent_count = 0
+        email_body = f"Hello,\n\nPlease find the attached seating plan for the upcoming exam: {exam_name} scheduled on {exam_date}.\n\nBest regards,\nExam Administration"
+        for f in Faculty.query.filter(Faculty.is_active == True, Faculty.email != None, Faculty.email != '').all():
+            if send_exam_email(f.email, f"Seating Plan: {exam_name}", email_body, pdf_path):
+                sent_count += 1
+
+        flash_msg = f'Seating plan generated for {len(assignments)} students!'
+        if sent_count > 0:
+            flash_msg += f' Sent to {sent_count} faculty members.'
+        flash(flash_msg, 'success')
         return redirect(url_for('exam_detail', exam_id=exam_id))
 
     except Exception as e:
@@ -560,7 +618,7 @@ def bulk_generate():
         q = q.filter_by(batch_code=batch_code)
     students = [{'roll': s.roll_number, 'branch': s.branch, 'section': s.section} for s in q.all()]
 
-    faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact}
+    faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact, 'email': f.email}
                     for f in Faculty.query.filter_by(is_active=True).all()]
     active_halls = Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all()
     total_capacity = sum(h.capacity for h in active_halls)
@@ -625,6 +683,11 @@ def bulk_generate():
             generate_pdf(assignments, hall_faculty, halls_with_fac, blocks_data, exam_info, pdf_path)
             exam_obj.pdf_filename = pdf_filename
             db.session.commit()
+
+            # Send emails to faculty
+            email_body = f"Hello,\n\nPlease find the attached seating plan for the upcoming exam: {exam_name} scheduled on {exam_date}.\n\nBest regards,\nExam Administration"
+            for f in Faculty.query.filter(Faculty.is_active == True, Faculty.email != None, Faculty.email != '').all():
+                send_exam_email(f.email, f"Seating Plan: {exam_name}", email_body, pdf_path)
 
             pdf_paths.append({'filename': pdf_filename, 'path': pdf_path})
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
