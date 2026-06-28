@@ -83,6 +83,7 @@ class Faculty(db.Model):
     name          = db.Column(db.String(150), nullable=False)
     faculty_id    = db.Column(db.String(50), unique=True, nullable=False)
     contact       = db.Column(db.String(20), nullable=True)
+    email         = db.Column(db.String(150), nullable=True)
     department    = db.Column(db.String(100), nullable=True)
     is_active     = db.Column(db.Boolean, default=True)
     created_at    = db.Column(db.DateTime, default=datetime.utcnow)

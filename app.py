@@ -4,6 +4,8 @@ from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistor
 from algorithm import assign_seats, assign_faculty
 from pdf_generator import generate_pdf
 import pandas as pd
+import smtplib, threading
+from email.message import EmailMessage
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'exam-seating-secret-2024')
@@ -55,6 +57,59 @@ with app.app_context():
             _seed_block_halls(b.prefix)
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+def _send_email_async(app_context, subject, recipients, content, pdf_path):
+    with app_context:
+        mail_server = os.environ.get('MAIL_SERVER')
+        mail_port = int(os.environ.get('MAIL_PORT', 587))
+        mail_user = os.environ.get('MAIL_USERNAME')
+        mail_pass = os.environ.get('MAIL_PASSWORD')
+        mail_use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+
+        if not all([mail_server, mail_user, mail_pass]):
+            app.logger.warning("SMTP settings not fully configured. Skipping email distribution.")
+            return
+
+        try:
+            msg = EmailMessage()
+            msg['Subject'] = subject
+            msg['From'] = mail_user
+            msg['Bcc'] = ", ".join(recipients)
+            msg.set_content(content)
+
+            with open(pdf_path, 'rb') as f:
+                file_data = f.read()
+                file_name = os.path.basename(pdf_path)
+                msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
+
+            with smtplib.SMTP(mail_server, mail_port) as server:
+                if mail_use_tls:
+                    server.starttls()
+                server.login(mail_user, mail_pass)
+                server.send_message(msg)
+
+            app.logger.info(f"Exam seating plan emailed to {len(recipients)} faculty members via BCC.")
+        except Exception as e:
+            app.logger.error(f"Failed to send exam emails: {str(e)}")
+
+def send_exam_emails(exam, pdf_path):
+    """Trigger background email distribution of generated PDF."""
+    active_faculty = Faculty.query.filter_by(is_active=True).all()
+    recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
+
+    if not recipients:
+        app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
+        return False
+
+    subject = f"Exam Seating Plan: {exam.exam_name} ({exam.exam_date})"
+    content = f"Please find the attached seating plan for the upcoming exam: {exam.exam_name} scheduled on {exam.exam_date}.\n\nThis is an automated message."
+
+    # Run email sending in a separate thread to avoid blocking the UI
+    thread = threading.Thread(target=_send_email_async, args=(
+        app.app_context(), subject, recipients, content, pdf_path
+    ))
+    thread.start()
+    return True
+
 def parse_batch_from_filename(filename):
     """Extract AY26-30 → join=2026, passout=2030 from filename like AY26-30.xlsx"""
     name = os.path.splitext(filename)[0].upper().strip()
@@ -104,6 +159,7 @@ def parse_excel_faculty(file):
     name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
     id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
     contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
+    email_col   = find_col(cols, ['email','mail','email_id','mail_id'])
     dept_col    = find_col(cols, ['dept','department'])
     facs = []
     for _, row in df.iterrows():
@@ -113,6 +169,7 @@ def parse_excel_faculty(file):
                 'name': name,
                 'faculty_id': str(row[id_col]).strip(),
                 'contact': str(row[contact_col]).strip(),
+                'email': str(row[email_col]).strip() if email_col else '',
                 'department': str(row[dept_col]).strip() if dept_col else ''
             })
     return facs
@@ -281,6 +338,7 @@ def add_faculty():
         return redirect(url_for('faculty'))
     db.session.add(Faculty(name=name, faculty_id=fid,
                            contact=request.form.get('contact',''),
+                           email=request.form.get('email',''),
                            department=request.form.get('department','')))
     db.session.commit()
     flash(f'{name} added.', 'success')
@@ -292,6 +350,7 @@ def edit_faculty(fid):
     f.name       = request.form.get('name', f.name).strip()
     f.faculty_id = request.form.get('faculty_id', f.faculty_id).strip()
     f.contact    = request.form.get('contact', f.contact)
+    f.email      = request.form.get('email', f.email)
     f.department = request.form.get('department', f.department)
     db.session.commit()
     flash('Faculty updated.', 'success')
@@ -322,7 +381,8 @@ def import_faculty():
         for r in rows:
             if not Faculty.query.filter_by(faculty_id=r['faculty_id']).first():
                 db.session.add(Faculty(name=r['name'], faculty_id=r['faculty_id'],
-                                       contact=r.get('contact',''), department=r.get('department','')))
+                                       contact=r.get('contact',''), email=r.get('email',''),
+                                       department=r.get('department','')))
                 added += 1
             else:
                 skipped += 1
@@ -491,6 +551,9 @@ def generate():
         exam_obj.pdf_filename = pdf_filename
         db.session.commit()
 
+        # Trigger email distribution
+        send_exam_emails(exam_obj, pdf_path)
+
         flash(f'Seating plan generated for {len(assignments)} students!', 'success')
         return redirect(url_for('exam_detail', exam_id=exam_id))
 
@@ -625,6 +688,9 @@ def bulk_generate():
             generate_pdf(assignments, hall_faculty, halls_with_fac, blocks_data, exam_info, pdf_path)
             exam_obj.pdf_filename = pdf_filename
             db.session.commit()
+
+            # Trigger email distribution for each exam in bulk
+            send_exam_emails(exam_obj, pdf_path)
 
             pdf_paths.append({'filename': pdf_filename, 'path': pdf_path})
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
