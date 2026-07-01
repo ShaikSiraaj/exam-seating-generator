@@ -1,11 +1,18 @@
-import os, uuid, re
+import os
+import uuid
+import re
+import random
+import smtplib
+import threading
+import zipfile
+import traceback
+from datetime import datetime
+from email.message import EmailMessage
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+import pandas as pd
 from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory
 from algorithm import assign_seats, assign_faculty
 from pdf_generator import generate_pdf
-import pandas as pd
-import smtplib, threading
-from email.message import EmailMessage
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'exam-seating-secret-2024')
@@ -489,10 +496,9 @@ def generate():
         batch_code = request.form.get('batch_code','').strip() or None
 
         # Validate exam date is not in the past
-        from datetime import datetime as _dt
         try:
-            _exam_dt = _dt.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
-            if _exam_dt < _dt.today().date():
+            _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
+            if _exam_dt < datetime.now().date():
                 flash('Exam date cannot be in the past. Please select today or a future date.', 'danger')
                 return redirect(url_for('generate'))
         except Exception:
@@ -611,8 +617,6 @@ def bulk_generate():
                                hall_count=Hall.query.filter_by(is_active=True).count(),
                                batches=batches)
 
-    import zipfile, traceback as tb
-
     college    = request.form.get('college', '').strip()
     session    = request.form.get('session', '10:00 AM - 01:00 PM').strip()
     batch_code = request.form.get('batch_code', '').strip() or None
@@ -661,9 +665,8 @@ def bulk_generate():
             continue
 
         try:
-            import random as _rnd
             shuffled = students[:]
-            _rnd.shuffle(shuffled)
+            random.shuffle(shuffled)
 
             exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
                             'exam_date': exam_date, 'session': session, 'batch_code': batch_code or ''}
@@ -698,7 +701,7 @@ def bulk_generate():
 
         except Exception as e:
             db.session.rollback()
-            app.logger.error(tb.format_exc())
+            app.logger.error(traceback.format_exc())
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
                             'status': 'error', 'error': str(e)})
 
