@@ -1,6 +1,6 @@
-markdown# 🎓 Exam Seating Portal
+# 🎓 Exam Seating Portal
 
-> A full-stack university admin portal for automated exam seating plan generation, PDF export, and supplementary exam management.
+> A full-stack university admin portal for automated exam seating plan generation and PDF export.
 
 🌐 **Live Demo:** https://exam-seating-generator.onrender.com/
 
@@ -17,7 +17,7 @@ markdown# 🎓 Exam Seating Portal
 ### Seating Algorithm
 - 🔀 Branch interleaving — no two students from the same branch sit side by side
 - 🪑 1 student per seat, 6 columns × 8 rows per hall (configurable per hall)
-- 👨‍🏫 2–3 faculty randomly assigned per hall as invigilators
+- 👨–🏫 2–3 faculty randomly assigned per hall as invigilators
 - 📊 Tracks seating history across exams
 
 ### PDF Generation
@@ -39,12 +39,6 @@ markdown# 🎓 Exam Seating Portal
 | Information Technology | IT |
 | Mechanical Engineering | MECH |
 | MBA (HA) | MBA |
-
-### Supplementary Exam Module *(separate from regular exams)*
-- ➕ Create a supply exam independently — separate DB, separate PDF, separate history
-- 🔍 Add students by searching existing DB roll numbers or importing Excel
-- ✅ Admin manually selects which halls and faculty to use
-- ⚡ Same interleaving algorithm — generates PDF marked **[SUPPLEMENTARY]**
 
 ---
 
@@ -86,7 +80,6 @@ exam-seating-generator/
 ├── models.py                 # SQLAlchemy DB models
 ├── algorithm.py              # Seating + faculty assignment logic
 ├── pdf_generator.py          # PDF generation (university reference format)
-├── supply_routes.py          # Supplementary exam module (Blueprint)
 ├── requirements.txt          # Python dependencies
 │
 ├── templates/
@@ -98,13 +91,7 @@ exam-seating-generator/
 │   ├── generate.html         # Generate exam plan
 │   ├── bulk_generate.html    # Bulk generate (6 exams at once)
 │   ├── exams.html            # Exam history list
-│   ├── exam_detail.html      # Hall-wise seating grid view
-│   └── supply/
-│       ├── supply_list.html      # All supplementary exams
-│       ├── supply_create.html    # Step 1 — exam details
-│       ├── supply_students.html  # Step 2 — add/import students
-│       ├── supply_generate.html  # Step 3 — select halls & faculty
-│       └── supply_detail.html    # View generated supply plan
+│   └── exam_detail.html      # Hall-wise seating grid view
 │
 ├── static/
 │   └── logo.png              # College logo
@@ -114,6 +101,7 @@ exam-seating-generator/
 │
 ├── uploads/                  # Temporary Excel upload files
 └── outputs/                  # Generated PDF files
+```
 
 ---
 
@@ -166,9 +154,7 @@ Page 3+ ─── Seating Grid per Hall
 ## ⚙️ Validation & Safety
 
 - 📅 Exam date cannot be set in the **past** — calendar picker enforces `minDate: today`
-- 🔒 Supply exam students must **already exist** in the main student database
 - ⚠️ Capacity check before generation — alerts if selected halls can't fit all students
-- 🔁 Re-generating a supply exam overwrites the previous plan with a confirmation prompt
 
 ---
 
@@ -189,7 +175,7 @@ Page 3+ ─── Seating Grid per Hall
 
 ## 📝 Notes
 
-- Place your college logo at `static/logo.png` — it will appear on all PDF pages and the sidebar. Recommended aspect ratio: **908 × 130 px**
+- Place your college logo at `static/logo.png` — it will appear on all PDF pages and the sidebar.
 - The `outputs/` folder holds all generated PDFs. Back it up regularly.
 - The `instance/exam_seating.db` file is your entire database — back this up before any updates.
 
