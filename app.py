@@ -10,7 +10,7 @@ from datetime import datetime
 from email.message import EmailMessage
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import pandas as pd
-from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory
+from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory, get_utc_now
 from algorithm import assign_seats, assign_faculty
 from pdf_generator import generate_pdf
 
@@ -237,7 +237,13 @@ def add_student():
 @app.route('/students/edit/<int:sid>', methods=['POST'])
 def edit_student(sid):
     s = Student.query.get_or_404(sid)
-    s.roll_number = request.form.get('roll_number', s.roll_number).strip()
+    new_roll = request.form.get('roll_number', s.roll_number).strip()
+    if new_roll != s.roll_number:
+        if Student.query.filter_by(roll_number=new_roll).first():
+            flash(f'Roll number {new_roll} already exists.', 'danger')
+            return redirect(url_for('students'))
+
+    s.roll_number = new_roll
     s.branch      = request.form.get('branch', s.branch).strip().upper()
     s.batch_code  = request.form.get('batch_code') or s.batch_code
     s.section     = request.form.get('section', s.section)
@@ -274,19 +280,29 @@ def import_students():
             batch_code = request.form.get('batch_code') or None
 
         rows    = parse_excel_students(file, batch_code)
-        added   = 0; skipped = 0
+        added   = 0; skipped = 0; skipped_rolls = []
         for r in rows:
+            if not r['roll'] or r['roll'] == 'nan':
+                skipped += 1
+                continue
             if not Student.query.filter_by(roll_number=r['roll']).first():
                 db.session.add(Student(roll_number=r['roll'], branch=r['branch'],
                                        batch_code=r['batch_code'], section=r.get('section','')))
                 added += 1
             else:
                 skipped += 1
+                skipped_rolls.append(r['roll'])
         db.session.commit()
+        # Cleanup uploaded file
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
         msg = f'Import complete: {added} added, {skipped} skipped.'
+        if skipped_rolls:
+            msg += f" Duplicate rolls: {', '.join(skipped_rolls[:5])}{'...' if len(skipped_rolls) > 5 else ''}"
         if batch_code:
             msg += f' Batch: {batch_code}'
-        flash(msg, 'success')
+        flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
     return redirect(url_for('students'))
@@ -354,8 +370,14 @@ def add_faculty():
 @app.route('/faculty/edit/<int:fid>', methods=['POST'])
 def edit_faculty(fid):
     f = Faculty.query.get_or_404(fid)
+    new_fid = request.form.get('faculty_id', f.faculty_id).strip()
+    if new_fid != f.faculty_id:
+        if Faculty.query.filter_by(faculty_id=new_fid).first():
+            flash(f'Faculty ID {new_fid} already exists.', 'danger')
+            return redirect(url_for('faculty'))
+
     f.name       = request.form.get('name', f.name).strip()
-    f.faculty_id = request.form.get('faculty_id', f.faculty_id).strip()
+    f.faculty_id = new_fid
     f.contact    = request.form.get('contact', f.contact)
     f.email      = request.form.get('email', f.email)
     f.department = request.form.get('department', f.department)
@@ -384,8 +406,11 @@ def import_faculty():
         return redirect(url_for('faculty'))
     try:
         rows = parse_excel_faculty(file)
-        added = 0; skipped = 0
+        added = 0; skipped = 0; skipped_fids = []
         for r in rows:
+            if not r['faculty_id'] or r['faculty_id'] == 'nan':
+                skipped += 1
+                continue
             if not Faculty.query.filter_by(faculty_id=r['faculty_id']).first():
                 db.session.add(Faculty(name=r['name'], faculty_id=r['faculty_id'],
                                        contact=r.get('contact',''), email=r.get('email',''),
@@ -393,8 +418,16 @@ def import_faculty():
                 added += 1
             else:
                 skipped += 1
+                skipped_fids.append(r['faculty_id'])
         db.session.commit()
-        flash(f'Import complete: {added} added, {skipped} skipped.', 'success')
+        # Cleanup uploaded file
+        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
+        msg = f'Import complete: {added} added, {skipped} skipped.'
+        if skipped_fids:
+            msg += f" Duplicate IDs: {', '.join(skipped_fids[:5])}{'...' if len(skipped_fids) > 5 else ''}"
+        flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
     return redirect(url_for('faculty'))
@@ -498,7 +531,7 @@ def generate():
         # Validate exam date is not in the past
         try:
             _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
-            if _exam_dt < datetime.now().date():
+            if _exam_dt < get_utc_now().date():
                 flash('Exam date cannot be in the past. Please select today or a future date.', 'danger')
                 return redirect(url_for('generate'))
         except Exception:
@@ -553,9 +586,22 @@ def generate():
         for h in halls_data:
             h['faculty'] = hall_faculty.get(h['hall_id'], [])
 
-        generate_pdf(assignments, hall_faculty, halls_data, blocks_data, exam_info, pdf_path)
+        try:
+            generate_pdf(assignments, hall_faculty, halls_data, blocks_data, exam_info, pdf_path)
+        except Exception as pdf_err:
+            db.session.rollback()
+            flash(f'PDF Generation Error: {str(pdf_err)}', 'danger')
+            app.logger.error(f"PDF Error: {traceback.format_exc()}")
+            return redirect(url_for('generate'))
+
         exam_obj.pdf_filename = pdf_filename
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as db_err:
+            db.session.rollback()
+            flash(f'Database Error while saving exam: {str(db_err)}', 'danger')
+            app.logger.error(f"DB Error: {traceback.format_exc()}")
+            return redirect(url_for('generate'))
 
         # Trigger email distribution
         send_exam_emails(exam_obj, pdf_path)
@@ -565,8 +611,7 @@ def generate():
 
     except Exception as e:
         db.session.rollback()
-        import traceback
-        flash(f'Error: {str(e)}', 'danger')
+        flash(f'Generation Error: {str(e)}', 'danger')
         app.logger.error(traceback.format_exc())
         return redirect(url_for('generate'))
 
