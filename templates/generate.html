@@ -61,14 +61,23 @@
               <input type="text" name="session" class="form-control" value="10:00 AM-01:00 PM" required/>
             </div>
           </div>
-          <div class="mb-3 mt-3" id="batchRow">
-            <label class="form-label">Batch (optional)</label>
-            <select name="batch_code" class="form-select">
-              <option value="">All batches</option>
-              {% for b in batches %}
-              <option value="{{ b.batch_code }}">{{ b.batch_code }} ({{ b.join_year }}–{{ b.passout_year }})</option>
-              {% endfor %}
-            </select>
+          <div class="row g-2 mb-3 mt-3">
+            <div class="col-md-6">
+              <label class="form-label">Batch (optional)</label>
+              <select name="batch_code" class="form-select">
+                <option value="">All batches</option>
+                {% for b in batches %}
+                <option value="{{ b.batch_code }}">{{ b.batch_code }} ({{ b.join_year }}–{{ b.passout_year }})</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Seating Algorithm *</label>
+              <select name="algorithm" class="form-select" required>
+                <option value="standard" selected>Standard Interleaving (Mixed)</option>
+                <option value="diamond">Diamond / Checkerboard (50% Cap)</option>
+              </select>
+            </div>
           </div>
           <hr class="my-3"/>
           <div class="alert alert-info" style="font-size:12px">
