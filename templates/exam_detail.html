@@ -81,9 +81,10 @@
   <div class="card-body">
     <div class="row g-2" style="font-size:13px">
       <div class="col-md-3"><strong>Exam ID</strong><br><code>{{ exam.exam_id }}</code></div>
-      <div class="col-md-5"><strong>Exam Name</strong><br>{{ exam.exam_name }}</div>
+      <div class="col-md-3"><strong>Exam Name</strong><br>{{ exam.exam_name }}</div>
       <div class="col-md-2"><strong>Date</strong><br>{{ exam.exam_date }}</div>
       <div class="col-md-2"><strong>Session</strong><br>{{ exam.session }}</div>
+      <div class="col-md-2"><strong>Algorithm</strong><br><span class="badge bg-secondary">{{ exam.algorithm|title }}</span></div>
       <div class="col-12 mt-2">
         <strong>Total Students Seated:</strong>
         <span class="badge bg-primary fs-6">{{ exam.total_students }}</span>

@@ -527,6 +527,7 @@ def generate():
         exam_date  = request.form.get('exam_date','').strip()
         session    = request.form.get('session','10:00 AM - 01:00 PM').strip()
         batch_code = request.form.get('batch_code','').strip() or None
+        algorithm  = request.form.get('algorithm', 'standard').strip()
 
         # Validate exam date is not in the past
         try:
@@ -565,14 +566,15 @@ def generate():
         halls_data   = [{'hall_id': h.hall_id, 'hall_name': h.hall_name, 'cols': h.cols, 'rows': h.rows} for h in active_halls]
         blocks_data  = [{'prefix': b.prefix, 'department': b.department, 'block_name': b.block_name} for b in Block.query.all()]
         exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
-                        'exam_date': exam_date, 'session': session, 'batch_code': batch_code or ''}
+                        'exam_date': exam_date, 'session': session, 'batch_code': batch_code or '',
+                        'algorithm': algorithm}
 
-        assignments  = assign_seats(students, halls_data, exam_id)
+        assignments  = assign_seats(students, halls_data, exam_id, algorithm=algorithm)
         hall_faculty = assign_faculty(halls_data, faculty_list)
 
         exam_obj = Exam(exam_id=exam_id, exam_name=exam_name, college=college,
                         exam_date=exam_date, session=session, batch_code=batch_code,
-                        total_students=len(assignments))
+                        algorithm=algorithm, total_students=len(assignments))
         db.session.add(exam_obj)
 
         for a in assignments:
@@ -665,6 +667,7 @@ def bulk_generate():
     college    = request.form.get('college', '').strip()
     session    = request.form.get('session', '10:00 AM - 01:00 PM').strip()
     batch_code = request.form.get('batch_code', '').strip() or None
+    algorithm  = request.form.get('algorithm', 'standard').strip()
     results    = []
 
     q = Student.query
@@ -714,13 +717,14 @@ def bulk_generate():
             random.shuffle(shuffled)
 
             exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
-                            'exam_date': exam_date, 'session': session, 'batch_code': batch_code or ''}
-            assignments  = assign_seats(shuffled, halls_data, exam_id)
+                            'exam_date': exam_date, 'session': session, 'batch_code': batch_code or '',
+                            'algorithm': algorithm}
+            assignments  = assign_seats(shuffled, halls_data, exam_id, algorithm=algorithm)
             hall_faculty = assign_faculty(halls_data, faculty_list)
 
             exam_obj = Exam(exam_id=exam_id, exam_name=exam_name, college=college,
                             exam_date=exam_date, session=session, batch_code=batch_code,
-                            total_students=len(assignments))
+                            algorithm=algorithm, total_students=len(assignments))
             db.session.add(exam_obj)
 
             for a in assignments:

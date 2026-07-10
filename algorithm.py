@@ -109,7 +109,7 @@ def full_slots(cols, rows):
     return slots
 
 
-def snake_distribute(students, halls):
+def snake_distribute(students, halls, algorithm='standard'):
     """
     Fill each hall before moving to the next.
 
@@ -124,7 +124,9 @@ def snake_distribute(students, halls):
     sit adjacent. This halves the usable capacity for that hall, so any
     overflow is pushed on to the next hall.
 
-    Returns (hall_buckets, single_branch_halls) where single_branch_halls
+    If algorithm is 'diamond', all halls use checkerboard pattern.
+
+    Returns (hall_buckets, checkerboard_halls) where checkerboard_halls
     is the set of hall_ids that were seated in checkerboard mode.
     """
     if not halls or not students:
@@ -132,7 +134,7 @@ def snake_distribute(students, halls):
 
     hall_ids     = [h['hall_id'] for h in halls]
     hall_buckets = {hid: [] for hid in hall_ids}
-    single_branch_halls = set()
+    checkerboard_halls = set()
 
     student_index = 0
     total         = len(students)
@@ -146,39 +148,44 @@ def snake_distribute(students, halls):
         rows = hall.get('rows', 8)
         full_cap = cols * rows
 
-        # Peek at the next full-capacity-sized block to see whether it's
-        # made up of a single branch (no mixing possible) or several.
-        window = students[student_index:student_index + full_cap]
-        branches_in_window = {s['branch'] for s in window}
-
-        if len(branches_in_window) == 1:
+        if algorithm == 'diamond':
             cap = checkerboard_capacity(cols, rows)
-            single_branch_halls.add(hall_id)
+            checkerboard_halls.add(hall_id)
         else:
-            cap = full_cap
+            # Peek at the next full-capacity-sized block to see whether it's
+            # made up of a single branch (no mixing possible) or several.
+            window = students[student_index:student_index + full_cap]
+            branches_in_window = {s['branch'] for s in window}
+
+            if len(branches_in_window) == 1:
+                cap = checkerboard_capacity(cols, rows)
+                checkerboard_halls.add(hall_id)
+            else:
+                cap = full_cap
 
         bucket = students[student_index:student_index + cap]
         hall_buckets[hall_id] = bucket
         student_index += len(bucket)
 
-    return hall_buckets, single_branch_halls
+    return hall_buckets, checkerboard_halls
 
 
-def assign_seats(students, halls, exam_id):
+def assign_seats(students, halls, exam_id, algorithm='standard'):
     """
     Main pipeline:
     1. Interleave all students by branch.
     2. Snake distribute — fill each hall completely (or to checkerboard
-       capacity if a hall would otherwise be single-branch).
+       capacity if a hall would otherwise be single-branch or if
+       algorithm is 'diamond').
     3. Assign one student per seat, column by column, row by row —
        using every seat for mixed-branch halls, or only the checkerboard
-       seats (with the rest left VACANT) for single-branch halls.
+       seats (with the rest left VACANT) for checkerboard halls.
     """
     if not students or not halls:
         return []
 
     interleaved_all = interleave_by_branch(students)
-    hall_buckets, single_branch_halls = snake_distribute(interleaved_all, halls)
+    hall_buckets, checkerboard_halls = snake_distribute(interleaved_all, halls, algorithm)
 
     assignments = []
 
@@ -191,7 +198,7 @@ def assign_seats(students, halls, exam_id):
         if not bucket:
             continue
 
-        if hall_id in single_branch_halls:
+        if hall_id in checkerboard_halls:
             slots = checkerboard_slots(cols, rows)
         else:
             slots = full_slots(cols, rows)
@@ -209,7 +216,7 @@ def assign_seats(students, halls, exam_id):
                 'seat_pos': 1,                  # always 1 (single occupancy)
                 'col':      slot['col'],
                 'row':      slot['row'],
-                'checkerboard': hall_id in single_branch_halls,
+                'checkerboard': hall_id in checkerboard_halls,
             })
 
     return assignments

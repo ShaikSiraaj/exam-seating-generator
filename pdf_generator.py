@@ -112,6 +112,8 @@ def draw_page_header(c, exam_info, hall_name, dept_info, faculty_list, page_w, p
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(MARGIN_L, y, f"Session : {exam_info.get('session', '10:00 AM - 01:00 PM')}")
+    algo = exam_info.get('algorithm', 'standard').title()
+    c.drawString(page_w / 2, y, f"Algorithm : {algo}")
     y -= 0.42 * cm
 
     c.setFont("Helvetica", 8)

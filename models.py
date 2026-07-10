@@ -102,6 +102,7 @@ class Exam(db.Model):
     batch_code    = db.Column(db.String(20), nullable=True)
     pdf_filename  = db.Column(db.String(255), nullable=True)
     total_students= db.Column(db.Integer, default=0)
+    algorithm     = db.Column(db.String(50), default='standard')
     created_at    = db.Column(db.DateTime, default=get_utc_now)
     seatings      = db.relationship('SeatingHistory', backref='exam', lazy=True, cascade='all, delete-orphan')
 
