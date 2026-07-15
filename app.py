@@ -11,7 +11,7 @@ from email.message import EmailMessage
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import pandas as pd
 from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory, get_utc_now
-from algorithm import assign_seats, assign_faculty
+from algorithm import assign_seats, assign_faculty, checkerboard_capacity
 from pdf_generator import generate_pdf
 
 app = Flask(__name__)
@@ -245,7 +245,7 @@ def edit_student(sid):
 
     s.roll_number = new_roll
     s.branch      = request.form.get('branch', s.branch).strip().upper()
-    s.batch_code  = request.form.get('batch_code') or s.batch_code
+    s.batch_code  = request.form.get('batch_code') or None
     s.section     = request.form.get('section', s.section)
     db.session.commit()
     flash('Student updated.', 'success')
@@ -264,6 +264,7 @@ def import_students():
     if not file or not file.filename:
         flash('Please select an Excel file.', 'danger')
         return redirect(url_for('students'))
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     try:
         # Auto-detect batch from filename
         batch_code, join_year, passout_year = parse_batch_from_filename(file.filename)
@@ -293,10 +294,6 @@ def import_students():
                 skipped += 1
                 skipped_rolls.append(r['roll'])
         db.session.commit()
-        # Cleanup uploaded file
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        if os.path.exists(upload_path):
-            os.remove(upload_path)
         msg = f'Import complete: {added} added, {skipped} skipped.'
         if skipped_rolls:
             msg += f" Duplicate rolls: {', '.join(skipped_rolls[:5])}{'...' if len(skipped_rolls) > 5 else ''}"
@@ -305,6 +302,9 @@ def import_students():
         flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
+    finally:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
     return redirect(url_for('students'))
 
 @app.route('/students/delete-all', methods=['POST'])
@@ -404,6 +404,7 @@ def import_faculty():
     if not file or not file.filename:
         flash('Please select an Excel file.', 'danger')
         return redirect(url_for('faculty'))
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     try:
         rows = parse_excel_faculty(file)
         added = 0; skipped = 0; skipped_fids = []
@@ -420,16 +421,15 @@ def import_faculty():
                 skipped += 1
                 skipped_fids.append(r['faculty_id'])
         db.session.commit()
-        # Cleanup uploaded file
-        upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
-        if os.path.exists(upload_path):
-            os.remove(upload_path)
         msg = f'Import complete: {added} added, {skipped} skipped.'
         if skipped_fids:
             msg += f" Duplicate IDs: {', '.join(skipped_fids[:5])}{'...' if len(skipped_fids) > 5 else ''}"
         flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
+    finally:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
     return redirect(url_for('faculty'))
 
 # ── Halls & Blocks ─────────────────────────────────────────────────────────
@@ -558,7 +558,10 @@ def generate():
             return redirect(url_for('generate'))
 
         active_halls = Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all()
-        total_capacity = sum(h.capacity for h in active_halls)
+        if algorithm == 'diamond':
+            total_capacity = sum(checkerboard_capacity(h.cols, h.rows) for h in active_halls)
+        else:
+            total_capacity = sum(h.capacity for h in active_halls)
         if len(students) > total_capacity:
             flash(f"Insufficient capacity! Required: {len(students)}, Available: {total_capacity}. Please activate more halls.", "danger")
             return redirect(url_for('generate'))
@@ -678,7 +681,10 @@ def bulk_generate():
     faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact}
                     for f in Faculty.query.filter_by(is_active=True).all()]
     active_halls = Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all()
-    total_capacity = sum(h.capacity for h in active_halls)
+    if algorithm == 'diamond':
+        total_capacity = sum(checkerboard_capacity(h.cols, h.rows) for h in active_halls)
+    else:
+        total_capacity = sum(h.capacity for h in active_halls)
     if len(students) > total_capacity:
         flash(f"Insufficient capacity for bulk generation! Required: {len(students)}, Available: {total_capacity}.", "danger")
         return redirect(url_for('bulk_generate'))
@@ -706,6 +712,16 @@ def bulk_generate():
         exam_id   = entry['exam_id']
         exam_name = entry['exam_name']
         exam_date = entry['exam_date']
+
+        # Validate exam date is not in the past
+        try:
+            _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
+            if _exam_dt < get_utc_now().date():
+                results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
+                                'status': 'error', 'error': 'Exam date cannot be in the past. Please select today or a future date.'})
+                continue
+        except Exception:
+            pass
 
         if Exam.query.filter_by(exam_id=exam_id).first():
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
