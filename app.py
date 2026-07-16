@@ -8,15 +8,13 @@ import zipfile
 import traceback
 from datetime import datetime
 from email.message import EmailMessage
-<<<<<<< HEAD
 from sqlalchemy import text
-=======
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import pandas as pd
 from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory, get_utc_now
 from algorithm import assign_seats, assign_faculty, checkerboard_capacity
 from pdf_generator import generate_pdf
->>>>>>> 14b2a16c82d406f585eb0bd0179fbff0cb99fc2d
+
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'exam-seating-secret-2024')
