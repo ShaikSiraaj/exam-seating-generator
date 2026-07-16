@@ -6,6 +6,7 @@ from pdf_generator import generate_pdf
 import pandas as pd
 import smtplib, threading
 from email.message import EmailMessage
+from sqlalchemy import text
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'exam-seating-secret-2024')
@@ -40,8 +41,42 @@ def _seed_block_halls(prefix):
                                     block_prefix=prefix, cols=6, rows=8))
     db.session.commit()
 
+
+def ensure_database_schema():
+    inspector = db.inspect(db.engine)
+    existing_tables = set(inspector.get_table_names())
+    models = [Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory]
+
+    for model in models:
+        table_name = model.__tablename__
+        if table_name not in existing_tables:
+            db.create_all()
+            inspector = db.inspect(db.engine)
+            existing_tables = set(inspector.get_table_names())
+            break
+
+    for model in models:
+        table_name = model.__tablename__
+        if table_name not in existing_tables:
+            continue
+
+        existing_columns = {col['name'] for col in inspector.get_columns(table_name)}
+        for column in model.__table__.columns:
+            if column.name in existing_columns:
+                continue
+
+            column_type = column.type.compile(dialect=db.engine.dialect)
+            try:
+                db.session.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column.name} {column_type}'))
+            except Exception as exc:
+                app.logger.warning(f"Unable to add missing column {table_name}.{column.name}: {exc}")
+
+    db.session.commit()
+
+
 with app.app_context():
     db.create_all()
+    ensure_database_schema()
     if Block.query.count() == 0:
         defaults = [
             Block(prefix='A', department='CSE', block_name='Admin Block (A-Block)'),
@@ -154,23 +189,27 @@ def parse_excel_faculty(file):
     path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(path)
     df = pd.read_excel(path)
-    df.columns = [str(c).strip().lower().replace(' ','_') for c in df.columns]
+    df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
     cols = list(df.columns)
     name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
     id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
     contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
-    email_col   = find_col(cols, ['email','mail','email_id','mail_id'])
-    dept_col    = find_col(cols, ['dept','department'])
+    email_col   = find_col(cols, ['email','mail','email_id','mail_id','email_address','emailaddress','e_mail','e_mail_address','emailid','mailid'])
+    dept_col    = find_col(cols, ['dept','department','department_name'])
     facs = []
     for _, row in df.iterrows():
         name = str(row[name_col]).strip()
         if name and name.lower() not in ('nan','none',''):
+            raw_email = row[email_col] if email_col else ''
+            email_value = ''
+            if pd.notna(raw_email):
+                email_value = str(raw_email).strip()
             facs.append({
                 'name': name,
                 'faculty_id': str(row[id_col]).strip(),
-                'contact': str(row[contact_col]).strip(),
-                'email': str(row[email_col]).strip() if email_col else '',
-                'department': str(row[dept_col]).strip() if dept_col else ''
+                'contact': str(row[contact_col]).strip() if pd.notna(row[contact_col]) else '',
+                'email': email_value,
+                'department': str(row[dept_col]).strip() if dept_col and pd.notna(row[dept_col]) else ''
             })
     return facs
 

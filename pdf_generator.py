@@ -285,25 +285,19 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         br for hb in hall_branch.values() for br in hb.keys()
     ))
 
-    # Column widths — no invigilator column
+    # Column widths — branch details are listed vertically in one column
     col_room  = 1.5 * cm
     col_block = 1.8 * cm
     col_total = 1.2 * cm
-    usable_w  = page_w - MARGIN_L - MARGIN_R
-    branch_total_w = usable_w - col_room - col_block - col_total
-    col_br = branch_total_w / max(len(all_branches), 1)
-    col_br = max(0.9 * cm, min(col_br, 2.2 * cm))
+    col_branch = max(3.8 * cm, min(page_w - MARGIN_L - MARGIN_R - col_room - col_block - col_total, 6.2 * cm))
+    total_w = col_room + col_block + col_total + col_branch
 
-    total_w = col_room + col_block + col_total + col_br * len(all_branches)
-
-    # Build x positions
     xs = [MARGIN_L,
           MARGIN_L + col_room,
-          MARGIN_L + col_room + col_block]
-    for i in range(len(all_branches)):
-        xs.append(MARGIN_L + col_room + col_block + col_total + i * col_br)
+          MARGIN_L + col_room + col_block,
+          MARGIN_L + col_room + col_block + col_total]
 
-    row_h = 0.52 * cm
+    row_h = 0.58 * cm + 0.26 * cm * max(1, len(all_branches))
 
     def draw_header_row(y_pos):
         c.setFillColor(BLACK)
@@ -313,31 +307,26 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         c.drawString(xs[0] + 0.1*cm, y_pos - row_h*0.65, "Room")
         c.drawString(xs[1] + 0.1*cm, y_pos - row_h*0.65, "Block")
         c.drawString(xs[2] + 0.1*cm, y_pos - row_h*0.65, "Total")
-        for i, br in enumerate(all_branches):
-            c.drawString(xs[3 + i] + 0.1*cm, y_pos - row_h*0.65, br)
-        # Vertical lines inside header
+        c.drawString(xs[3] + 0.1*cm, y_pos - row_h*0.65, "Branches")
         c.setStrokeColor(WHITE)
         c.setLineWidth(0.4)
         for x_line in xs[1:]:
             c.line(x_line, y_pos, x_line, y_pos - row_h)
-        # Right border
         c.line(MARGIN_L + total_w, y_pos, MARGIN_L + total_w, y_pos - row_h)
         c.setFillColor(BLACK)
         return y_pos - row_h
 
     y = draw_header_row(y)
 
-    # Sort halls by hall_id
     sorted_halls = sorted(halls, key=lambda h: h['hall_id'])
-
-    grand_total  = 0
+    grand_total = 0
     grand_branch = defaultdict(int)
 
-    for ri, hall in enumerate(sorted_halls):
-        hid    = hall['hall_id']
-        block  = hid[0] + "-Block"
+    for hall in sorted_halls:
+        hid = hall['hall_id']
+        block = hid[0] + "-Block"
         counts = hall_branch.get(hid, {})
-        total  = sum(counts.values())
+        total = sum(counts.values())
         if total == 0:
             continue
 
@@ -345,44 +334,38 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         for br, cnt in counts.items():
             grand_branch[br] += cnt
 
-        # Draw only top horizontal line per row (cleaner look)
-                # Horizontal top line
+        branch_items = [f"{br}: {counts.get(br, 0)}" for br in all_branches if counts.get(br, 0) > 0]
+        if not branch_items:
+            branch_items = ["-"]
+
         c.setStrokeColor(BLACK)
         c.setLineWidth(0.3)
         c.line(MARGIN_L, y, MARGIN_L + total_w, y)
-        # Vertical column lines
         c.setLineWidth(0.3)
         for x_line in xs[1:]:
             c.line(x_line, y, x_line, y - row_h)
-        # Left and right border verticals
         c.line(MARGIN_L, y, MARGIN_L, y - row_h)
         c.line(MARGIN_L + total_w, y, MARGIN_L + total_w, y - row_h)
 
-        # Room ID — bold
         c.setFont("Helvetica-Bold", 7)
         c.drawString(xs[0] + 0.1*cm, y - row_h*0.65, hid)
 
-        # Block
         c.setFont("Helvetica", 6.5)
         c.drawString(xs[1] + 0.1*cm, y - row_h*0.65, block)
 
-        # Total — bold
         c.setFont("Helvetica-Bold", 7)
         c.drawString(xs[2] + 0.1*cm, y - row_h*0.65, str(total))
 
-        # Branch counts
-        for i, br in enumerate(all_branches):
-            cnt = counts.get(br, 0)
-            if cnt > 0:
-                c.setFont("Helvetica-Bold", 6.5)
-                c.drawString(xs[3 + i] + 0.1*cm, y - row_h*0.65, str(cnt))
-            else:
-                c.setFont("Helvetica", 6.5)
-                c.drawString(xs[3 + i] + 0.1*cm, y - row_h*0.65, "-")
+        c.setFont("Helvetica", 6.0)
+        text = c.beginText()
+        text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
+        text.setLeading(0.16*cm)
+        for item in branch_items:
+            text.textLine(item)
+        c.drawText(text)
 
         y -= row_h
 
-        # New page if running out of space
         if y < MARGIN_B + 2 * cm:
             c.showPage()
             y = PAGE_H - MARGIN_T - 0.5 * cm
@@ -393,8 +376,10 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
             y -= 0.5 * cm
             y = draw_header_row(y)
 
-    # Grand Total footer row — black fill, white bold text
-    # Grand total — top line, black fill, white text
+    grand_items = [f"{br}: {grand_branch.get(br, 0) or '-'}" for br in all_branches if grand_branch.get(br, 0) > 0]
+    if not grand_items:
+        grand_items = ["-"]
+
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.3)
     c.line(MARGIN_L, y, MARGIN_L + total_w, y)
@@ -404,10 +389,13 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     c.setFont("Helvetica-Bold", 7.5)
     c.drawString(xs[0] + 0.1*cm, y - row_h*0.65, "GRAND TOTAL")
     c.drawString(xs[2] + 0.1*cm, y - row_h*0.65, str(grand_total))
-    for i, br in enumerate(all_branches):
-        cnt = grand_branch.get(br, 0)
-        c.drawString(xs[3 + i] + 0.1*cm, y - row_h*0.65, str(cnt) if cnt else "-")
-    # Vertical lines in grand total row (white so visible on black)
+    c.setFont("Helvetica", 6.0)
+    text = c.beginText()
+    text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
+    text.setLeading(0.16*cm)
+    for item in grand_items:
+        text.textLine(item)
+    c.drawText(text)
     c.setStrokeColor(WHITE)
     c.setLineWidth(0.4)
     for x_line in xs[1:]:
@@ -415,7 +403,6 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     c.line(MARGIN_L, y, MARGIN_L, y - row_h)
     c.line(MARGIN_L + total_w, y, MARGIN_L + total_w, y - row_h)
     c.setFillColor(BLACK)
-    # Bottom closing line
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.5)
     c.line(MARGIN_L, y - row_h, MARGIN_L + total_w, y - row_h)
