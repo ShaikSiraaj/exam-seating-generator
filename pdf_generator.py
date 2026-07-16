@@ -7,32 +7,40 @@ from collections import defaultdict
 
 
 def abbr_branch(branch):
+    """Returns a short abbreviation for a given branch name."""
+    if not branch:
+        return ""
     b = branch.strip().upper()
-    if 'CHEMICAL' in b:
+
+    # Priority matches
+    if 'COMPUTER SCIENCE' in b and ('ENGINEERING' in b or 'CSE' in b):
+        return 'CSE'
+    if 'ELECTRONICS' in b and ('COMMUNICATION' in b or 'ECE' in b):
+        return 'ECE'
+    if 'ELECTRICAL' in b or 'EEE' in b:
+        return 'EEE'
+    if 'INFORMATION TECHNOLOGY' in b or b == 'IT':
+        return 'IT'
+    if 'MECHANICAL' in b or 'MECH' in b:
+        return 'MECH'
+    if 'CHEMICAL' in b or 'CHE' in b:
         return 'CHE'
     if 'CIVIL' in b:
         return 'Civil'
+    if 'DATA' in b and 'SCIENCE' in b:
+        return 'CSD'
     if 'AIM' in b:
         return 'CSM'
-    if 'DATASCIENCE' in b or 'DATA SCIENCE' in b or 'DATA  SCIENCE' in b:
-        return 'CSD'
-    if 'COMPUTER SCIENCE' in b and 'ENGINEERING' in b:
-        return 'CSE'
-    if ('ELECTRICAL' in b and 'ELECTRONICS' in b) or b == 'EEE':
-        return 'EEE'
-    if 'ELECTRONICS' in b and 'COMMUNICATION' in b:
-        return 'ECE'
-    if 'ELECTRONICS' in b:
-        return 'ECE'
-    if 'INFORMATION' in b or b == 'IT':
-        return 'IT'
-    if 'MECHANICAL' in b or b == 'MECH':
-        return 'MECH'
     if 'MBA' in b:
         return 'MBA'
-    if 'COMPUTER SCIENCE' in b:
-        return 'CSE'
-    return branch
+
+    # Fallbacks for common abbreviations if they were passed in as full name
+    short_forms = {
+        'CSE': 'CSE', 'ECE': 'ECE', 'EEE': 'EEE', 'IT': 'IT',
+        'MECH': 'MECH', 'CHE': 'CHE', 'CIVIL': 'Civil',
+        'CSD': 'CSD', 'CSM': 'CSM', 'MBA': 'MBA'
+    }
+    return short_forms.get(b, branch)
 
 
 PAGE_W, PAGE_H = A4
@@ -104,6 +112,8 @@ def draw_page_header(c, exam_info, hall_name, dept_info, faculty_list, page_w, p
 
     c.setFont("Helvetica-Bold", 9)
     c.drawString(MARGIN_L, y, f"Session : {exam_info.get('session', '10:00 AM - 01:00 PM')}")
+    algo = exam_info.get('algorithm', 'standard').title()
+    c.drawString(page_w / 2, y, f"Algorithm : {algo}")
     y -= 0.42 * cm
 
     c.setFont("Helvetica", 8)

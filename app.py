@@ -1,12 +1,22 @@
-import os, uuid, re
-from flask import Flask, render_template, request, redirect, url_for, flash, send_file
-from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory
-from algorithm import assign_seats, assign_faculty
-from pdf_generator import generate_pdf
-import pandas as pd
-import smtplib, threading
+import os
+import uuid
+import re
+import random
+import smtplib
+import threading
+import zipfile
+import traceback
+from datetime import datetime
 from email.message import EmailMessage
+<<<<<<< HEAD
 from sqlalchemy import text
+=======
+from flask import Flask, render_template, request, redirect, url_for, flash, send_file
+import pandas as pd
+from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory, get_utc_now
+from algorithm import assign_seats, assign_faculty, checkerboard_capacity
+from pdf_generator import generate_pdf
+>>>>>>> 14b2a16c82d406f585eb0bd0179fbff0cb99fc2d
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'exam-seating-secret-2024')
@@ -269,9 +279,15 @@ def add_student():
 @app.route('/students/edit/<int:sid>', methods=['POST'])
 def edit_student(sid):
     s = Student.query.get_or_404(sid)
-    s.roll_number = request.form.get('roll_number', s.roll_number).strip()
+    new_roll = request.form.get('roll_number', s.roll_number).strip()
+    if new_roll != s.roll_number:
+        if Student.query.filter_by(roll_number=new_roll).first():
+            flash(f'Roll number {new_roll} already exists.', 'danger')
+            return redirect(url_for('students'))
+
+    s.roll_number = new_roll
     s.branch      = request.form.get('branch', s.branch).strip().upper()
-    s.batch_code  = request.form.get('batch_code') or s.batch_code
+    s.batch_code  = request.form.get('batch_code') or None
     s.section     = request.form.get('section', s.section)
     db.session.commit()
     flash('Student updated.', 'success')
@@ -290,6 +306,7 @@ def import_students():
     if not file or not file.filename:
         flash('Please select an Excel file.', 'danger')
         return redirect(url_for('students'))
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     try:
         # Auto-detect batch from filename
         batch_code, join_year, passout_year = parse_batch_from_filename(file.filename)
@@ -306,21 +323,30 @@ def import_students():
             batch_code = request.form.get('batch_code') or None
 
         rows    = parse_excel_students(file, batch_code)
-        added   = 0; skipped = 0
+        added   = 0; skipped = 0; skipped_rolls = []
         for r in rows:
+            if not r['roll'] or r['roll'] == 'nan':
+                skipped += 1
+                continue
             if not Student.query.filter_by(roll_number=r['roll']).first():
                 db.session.add(Student(roll_number=r['roll'], branch=r['branch'],
                                        batch_code=r['batch_code'], section=r.get('section','')))
                 added += 1
             else:
                 skipped += 1
+                skipped_rolls.append(r['roll'])
         db.session.commit()
         msg = f'Import complete: {added} added, {skipped} skipped.'
+        if skipped_rolls:
+            msg += f" Duplicate rolls: {', '.join(skipped_rolls[:5])}{'...' if len(skipped_rolls) > 5 else ''}"
         if batch_code:
             msg += f' Batch: {batch_code}'
-        flash(msg, 'success')
+        flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
+    finally:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
     return redirect(url_for('students'))
 
 @app.route('/students/delete-all', methods=['POST'])
@@ -386,8 +412,14 @@ def add_faculty():
 @app.route('/faculty/edit/<int:fid>', methods=['POST'])
 def edit_faculty(fid):
     f = Faculty.query.get_or_404(fid)
+    new_fid = request.form.get('faculty_id', f.faculty_id).strip()
+    if new_fid != f.faculty_id:
+        if Faculty.query.filter_by(faculty_id=new_fid).first():
+            flash(f'Faculty ID {new_fid} already exists.', 'danger')
+            return redirect(url_for('faculty'))
+
     f.name       = request.form.get('name', f.name).strip()
-    f.faculty_id = request.form.get('faculty_id', f.faculty_id).strip()
+    f.faculty_id = new_fid
     f.contact    = request.form.get('contact', f.contact)
     f.email      = request.form.get('email', f.email)
     f.department = request.form.get('department', f.department)
@@ -414,10 +446,14 @@ def import_faculty():
     if not file or not file.filename:
         flash('Please select an Excel file.', 'danger')
         return redirect(url_for('faculty'))
+    upload_path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     try:
         rows = parse_excel_faculty(file)
-        added = 0; skipped = 0
+        added = 0; skipped = 0; skipped_fids = []
         for r in rows:
+            if not r['faculty_id'] or r['faculty_id'] == 'nan':
+                skipped += 1
+                continue
             if not Faculty.query.filter_by(faculty_id=r['faculty_id']).first():
                 db.session.add(Faculty(name=r['name'], faculty_id=r['faculty_id'],
                                        contact=r.get('contact',''), email=r.get('email',''),
@@ -425,10 +461,17 @@ def import_faculty():
                 added += 1
             else:
                 skipped += 1
+                skipped_fids.append(r['faculty_id'])
         db.session.commit()
-        flash(f'Import complete: {added} added, {skipped} skipped.', 'success')
+        msg = f'Import complete: {added} added, {skipped} skipped.'
+        if skipped_fids:
+            msg += f" Duplicate IDs: {', '.join(skipped_fids[:5])}{'...' if len(skipped_fids) > 5 else ''}"
+        flash(msg, 'success' if skipped == 0 else 'warning')
     except Exception as e:
         flash(f'Import error: {str(e)}', 'danger')
+    finally:
+        if os.path.exists(upload_path):
+            os.remove(upload_path)
     return redirect(url_for('faculty'))
 
 # ── Halls & Blocks ─────────────────────────────────────────────────────────
@@ -526,12 +569,12 @@ def generate():
         exam_date  = request.form.get('exam_date','').strip()
         session    = request.form.get('session','10:00 AM - 01:00 PM').strip()
         batch_code = request.form.get('batch_code','').strip() or None
+        algorithm  = request.form.get('algorithm', 'standard').strip()
 
         # Validate exam date is not in the past
-        from datetime import datetime as _dt
         try:
-            _exam_dt = _dt.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
-            if _exam_dt < _dt.today().date():
+            _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
+            if _exam_dt < get_utc_now().date():
                 flash('Exam date cannot be in the past. Please select today or a future date.', 'danger')
                 return redirect(url_for('generate'))
         except Exception:
@@ -557,7 +600,10 @@ def generate():
             return redirect(url_for('generate'))
 
         active_halls = Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all()
-        total_capacity = sum(h.capacity for h in active_halls)
+        if algorithm == 'diamond':
+            total_capacity = sum(checkerboard_capacity(h.cols, h.rows) for h in active_halls)
+        else:
+            total_capacity = sum(h.capacity for h in active_halls)
         if len(students) > total_capacity:
             flash(f"Insufficient capacity! Required: {len(students)}, Available: {total_capacity}. Please activate more halls.", "danger")
             return redirect(url_for('generate'))
@@ -565,14 +611,15 @@ def generate():
         halls_data   = [{'hall_id': h.hall_id, 'hall_name': h.hall_name, 'cols': h.cols, 'rows': h.rows} for h in active_halls]
         blocks_data  = [{'prefix': b.prefix, 'department': b.department, 'block_name': b.block_name} for b in Block.query.all()]
         exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
-                        'exam_date': exam_date, 'session': session, 'batch_code': batch_code or ''}
+                        'exam_date': exam_date, 'session': session, 'batch_code': batch_code or '',
+                        'algorithm': algorithm}
 
-        assignments  = assign_seats(students, halls_data, exam_id)
+        assignments  = assign_seats(students, halls_data, exam_id, algorithm=algorithm)
         hall_faculty = assign_faculty(halls_data, faculty_list)
 
         exam_obj = Exam(exam_id=exam_id, exam_name=exam_name, college=college,
                         exam_date=exam_date, session=session, batch_code=batch_code,
-                        total_students=len(assignments))
+                        algorithm=algorithm, total_students=len(assignments))
         db.session.add(exam_obj)
 
         for a in assignments:
@@ -586,9 +633,22 @@ def generate():
         for h in halls_data:
             h['faculty'] = hall_faculty.get(h['hall_id'], [])
 
-        generate_pdf(assignments, hall_faculty, halls_data, blocks_data, exam_info, pdf_path)
+        try:
+            generate_pdf(assignments, hall_faculty, halls_data, blocks_data, exam_info, pdf_path)
+        except Exception as pdf_err:
+            db.session.rollback()
+            flash(f'PDF Generation Error: {str(pdf_err)}', 'danger')
+            app.logger.error(f"PDF Error: {traceback.format_exc()}")
+            return redirect(url_for('generate'))
+
         exam_obj.pdf_filename = pdf_filename
-        db.session.commit()
+        try:
+            db.session.commit()
+        except Exception as db_err:
+            db.session.rollback()
+            flash(f'Database Error while saving exam: {str(db_err)}', 'danger')
+            app.logger.error(f"DB Error: {traceback.format_exc()}")
+            return redirect(url_for('generate'))
 
         # Trigger email distribution
         send_exam_emails(exam_obj, pdf_path)
@@ -598,8 +658,7 @@ def generate():
 
     except Exception as e:
         db.session.rollback()
-        import traceback
-        flash(f'Error: {str(e)}', 'danger')
+        flash(f'Generation Error: {str(e)}', 'danger')
         app.logger.error(traceback.format_exc())
         return redirect(url_for('generate'))
 
@@ -650,11 +709,10 @@ def bulk_generate():
                                hall_count=Hall.query.filter_by(is_active=True).count(),
                                batches=batches)
 
-    import zipfile, traceback as tb
-
     college    = request.form.get('college', '').strip()
     session    = request.form.get('session', '10:00 AM - 01:00 PM').strip()
     batch_code = request.form.get('batch_code', '').strip() or None
+    algorithm  = request.form.get('algorithm', 'standard').strip()
     results    = []
 
     q = Student.query
@@ -665,7 +723,10 @@ def bulk_generate():
     faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact}
                     for f in Faculty.query.filter_by(is_active=True).all()]
     active_halls = Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all()
-    total_capacity = sum(h.capacity for h in active_halls)
+    if algorithm == 'diamond':
+        total_capacity = sum(checkerboard_capacity(h.cols, h.rows) for h in active_halls)
+    else:
+        total_capacity = sum(h.capacity for h in active_halls)
     if len(students) > total_capacity:
         flash(f"Insufficient capacity for bulk generation! Required: {len(students)}, Available: {total_capacity}.", "danger")
         return redirect(url_for('bulk_generate'))
@@ -694,24 +755,34 @@ def bulk_generate():
         exam_name = entry['exam_name']
         exam_date = entry['exam_date']
 
+        # Validate exam date is not in the past
+        try:
+            _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
+            if _exam_dt < get_utc_now().date():
+                results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
+                                'status': 'error', 'error': 'Exam date cannot be in the past. Please select today or a future date.'})
+                continue
+        except Exception:
+            pass
+
         if Exam.query.filter_by(exam_id=exam_id).first():
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
                             'status': 'skipped', 'error': 'Exam ID already exists'})
             continue
 
         try:
-            import random as _rnd
             shuffled = students[:]
-            _rnd.shuffle(shuffled)
+            random.shuffle(shuffled)
 
             exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
-                            'exam_date': exam_date, 'session': session, 'batch_code': batch_code or ''}
-            assignments  = assign_seats(shuffled, halls_data, exam_id)
+                            'exam_date': exam_date, 'session': session, 'batch_code': batch_code or '',
+                            'algorithm': algorithm}
+            assignments  = assign_seats(shuffled, halls_data, exam_id, algorithm=algorithm)
             hall_faculty = assign_faculty(halls_data, faculty_list)
 
             exam_obj = Exam(exam_id=exam_id, exam_name=exam_name, college=college,
                             exam_date=exam_date, session=session, batch_code=batch_code,
-                            total_students=len(assignments))
+                            algorithm=algorithm, total_students=len(assignments))
             db.session.add(exam_obj)
 
             for a in assignments:
@@ -737,7 +808,7 @@ def bulk_generate():
 
         except Exception as e:
             db.session.rollback()
-            app.logger.error(tb.format_exc())
+            app.logger.error(traceback.format_exc())
             results.append({'exam_id': exam_id, 'exam_name': exam_name, 'exam_date': exam_date,
                             'status': 'error', 'error': str(e)})
 

@@ -1,7 +1,10 @@
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone
 
 db = SQLAlchemy()
+
+def get_utc_now():
+    return datetime.now(timezone.utc)
 
 class Batch(db.Model):
     __tablename__ = 'batches'
@@ -13,7 +16,7 @@ class Batch(db.Model):
 
     @property
     def current_year_label(self):
-        current = datetime.utcnow().year
+        current = get_utc_now().year
         diff = current - self.join_year + 1
         labels = {1: '1st Year', 2: '2nd Year', 3: '3rd Year', 4: '4th Year'}
         return labels.get(diff, f'Year {diff}')
@@ -75,7 +78,7 @@ class Student(db.Model):
     branch        = db.Column(db.String(50), nullable=False)
     batch_code    = db.Column(db.String(20), db.ForeignKey('batches.batch_code'), nullable=True)
     section       = db.Column(db.String(10), nullable=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=get_utc_now)
 
 class Faculty(db.Model):
     __tablename__ = 'faculty'
@@ -86,7 +89,7 @@ class Faculty(db.Model):
     email         = db.Column(db.String(150), nullable=True)
     department    = db.Column(db.String(100), nullable=True)
     is_active     = db.Column(db.Boolean, default=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at    = db.Column(db.DateTime, default=get_utc_now)
 
 class Exam(db.Model):
     __tablename__ = 'exams'
@@ -99,7 +102,8 @@ class Exam(db.Model):
     batch_code    = db.Column(db.String(20), nullable=True)
     pdf_filename  = db.Column(db.String(255), nullable=True)
     total_students= db.Column(db.Integer, default=0)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    algorithm     = db.Column(db.String(50), default='standard')
+    created_at    = db.Column(db.DateTime, default=get_utc_now)
     seatings      = db.relationship('SeatingHistory', backref='exam', lazy=True, cascade='all, delete-orphan')
 
 class SeatingHistory(db.Model):

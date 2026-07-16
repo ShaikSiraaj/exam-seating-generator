@@ -157,6 +157,13 @@
           <label class="form-label">Session *</label>
           <input type="text" name="session" class="form-control" value="10:00 AM - 01:00 PM" required/>
         </div>
+        <div class="col-12 col-md-6">
+          <label class="form-label">Seating Algorithm *</label>
+          <select name="algorithm" class="form-select" required>
+            <option value="standard" selected>Standard Interleaving (Mixed)</option>
+            <option value="diamond">Diamond / Checkerboard (50% Cap)</option>
+          </select>
+        </div>
       </div>
 
       <!-- 6 exam rows -->
@@ -174,8 +181,9 @@
               </div>
               <div class="col-12 col-md-3">
                 <label class="form-label">Date *</label>
-                <input type="date" name="exam_date_{{ i }}" id="date{{ i }}"
-                  class="form-control exam-input" data-idx="{{ i }}"/>
+                <input type="text" name="exam_date_{{ i }}" id="date{{ i }}"
+                  class="form-control exam-input date-picker" data-idx="{{ i }}"
+                  placeholder="Pick a date" readonly/>
               </div>
               <div class="col-12 col-md-3">
                 <label class="form-label">Exam ID <span style="font-weight:400;color:#9ca3af">(optional)</span></label>
