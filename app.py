@@ -107,16 +107,16 @@ def _send_email_async(app_context, subject, recipients, content, pdf_path):
     with app_context:
         mail_server = os.environ.get('MAIL_SERVER')
         mail_port = int(os.environ.get('MAIL_PORT', 587))
-        mail_user = os.environ.get('MAIL_USERNAME')
-        mail_pass = os.environ.get('MAIL_PASSWORD')
+        mail_user = os.environ.get('truescope09@gmail.com')
+        mail_pass = os.environ.get('.True$cope@09')
         mail_use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
         mail_use_ssl = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true' or mail_port == 465
         mail_sender = os.environ.get('MAIL_DEFAULT_SENDER') or mail_user
 
         missing = []
         if not mail_server: missing.append("MAIL_SERVER")
-        if not mail_user: missing.append("MAIL_USERNAME")
-        if not mail_pass: missing.append("MAIL_PASSWORD")
+        if not mail_user: missing.append("truescope09@gamil.com")
+        if not mail_pass: missing.append(".True$cope@09")
         if missing:
             app.logger.warning(f"SMTP settings not fully configured (missing: {', '.join(missing)}). Skipping email distribution.")
             return
