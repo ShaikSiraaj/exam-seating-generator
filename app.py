@@ -122,7 +122,8 @@ def _send_email_async(app_context, subject, recipients, content, pdf_path):
             with open(pdf_path, 'rb') as f:
                 file_data = f.read()
                 file_name = os.path.basename(pdf_path)
-                msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
+                subtype = 'zip' if file_name.lower().endswith('.zip') else 'pdf'
+                msg.add_attachment(file_data, maintype='application', subtype=subtype, filename=file_name)
 
             with smtplib.SMTP(mail_server, mail_port) as server:
                 if mail_use_tls:
@@ -149,6 +150,40 @@ def send_exam_emails(exam, pdf_path):
     # Run email sending in a separate thread to avoid blocking the UI
     thread = threading.Thread(target=_send_email_async, args=(
         app.app_context(), subject, recipients, content, pdf_path
+    ))
+    thread.start()
+    return True
+
+def send_download_emails(filename):
+    """Trigger background email distribution of downloaded PDF or ZIP file."""
+    active_faculty = Faculty.query.filter_by(is_active=True).all()
+    recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
+
+    if not recipients:
+        app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
+        return False
+
+    file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+    if not os.path.exists(file_path):
+        app.logger.warning(f"File {file_path} not found. Skipping email distribution.")
+        return False
+
+    if filename.lower().endswith('.zip'):
+        subject = f"Bulk Exam Seating Plans Downloaded: {filename}"
+        content = f"The bulk exam seating plans package ({filename}) has been downloaded.\n\nPlease find the attached ZIP archive for details.\n\nThis is an automated message."
+    else:
+        # Check if we can find an associated exam
+        exam = Exam.query.filter_by(pdf_filename=filename).first()
+        if exam:
+            subject = f"Exam Seating Plan Downloaded: {exam.exam_name} ({exam.exam_date})"
+            content = f"The seating plan for {exam.exam_name} scheduled on {exam.exam_date} has been downloaded.\n\nPlease find the attached seating plan PDF for details.\n\nThis is an automated message."
+        else:
+            subject = f"Exam Seating Plan Downloaded: {filename}"
+            content = f"An exam seating plan ({filename}) has been downloaded.\n\nPlease find the attached seating plan PDF for details.\n\nThis is an automated message."
+
+    # Run email sending in a separate thread to avoid blocking the UI
+    thread = threading.Thread(target=_send_email_async, args=(
+        app.app_context(), subject, recipients, content, file_path
     ))
     thread.start()
     return True
@@ -694,6 +729,7 @@ def delete_exam(exam_id):
 
 @app.route('/download/<filename>')
 def download(filename):
+    send_download_emails(filename)
     return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename), as_attachment=True)
 
 # ── Bulk Generate ──────────────────────────────────────────────────────────
@@ -826,6 +862,7 @@ def bulk_generate():
 
 @app.route('/download-zip/<filename>')
 def download_zip(filename):
+    send_download_emails(filename)
     return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename),
                      as_attachment=True, download_name=filename)
 
