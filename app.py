@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+load_dotenv()
+
 import uuid
 import re
 import random
@@ -107,37 +110,53 @@ def _send_email_async(app_context, subject, recipients, content, pdf_path):
         mail_user = os.environ.get('MAIL_USERNAME')
         mail_pass = os.environ.get('MAIL_PASSWORD')
         mail_use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
+        mail_use_ssl = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true' or mail_port == 465
+        mail_sender = os.environ.get('MAIL_DEFAULT_SENDER') or mail_user
 
-        if not all([mail_server, mail_user, mail_pass]):
-            app.logger.warning("SMTP settings not fully configured. Skipping email distribution.")
+        missing = []
+        if not mail_server: missing.append("MAIL_SERVER")
+        if not mail_user: missing.append("MAIL_USERNAME")
+        if not mail_pass: missing.append("MAIL_PASSWORD")
+        if missing:
+            app.logger.warning(f"SMTP settings not fully configured (missing: {', '.join(missing)}). Skipping email distribution.")
             return
 
         try:
             msg = EmailMessage()
             msg['Subject'] = subject
-            msg['From'] = mail_user
+            msg['From'] = mail_sender
             msg['Bcc'] = ", ".join(recipients)
             msg.set_content(content)
 
             with open(pdf_path, 'rb') as f:
                 file_data = f.read()
                 file_name = os.path.basename(pdf_path)
-                msg.add_attachment(file_data, maintype='application', subtype='pdf', filename=file_name)
+                subtype = 'zip' if file_name.lower().endswith('.zip') else 'pdf'
+                msg.add_attachment(file_data, maintype='application', subtype=subtype, filename=file_name)
 
-            with smtplib.SMTP(mail_server, mail_port) as server:
-                if mail_use_tls:
-                    server.starttls()
-                server.login(mail_user, mail_pass)
-                server.send_message(msg)
+            if mail_use_ssl:
+                with smtplib.SMTP_SSL(mail_server, mail_port) as server:
+                    server.login(mail_user, mail_pass)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(mail_server, mail_port) as server:
+                    if mail_use_tls:
+                        server.starttls()
+                    server.login(mail_user, mail_pass)
+                    server.send_message(msg)
 
             app.logger.info(f"Exam seating plan emailed to {len(recipients)} faculty members via BCC.")
         except Exception as e:
-            app.logger.error(f"Failed to send exam emails: {str(e)}")
+            app.logger.error(f"Failed to send exam emails: {str(e)}\n{traceback.format_exc()}")
 
 def send_exam_emails(exam, pdf_path):
     """Trigger background email distribution of generated PDF."""
     active_faculty = Faculty.query.filter_by(is_active=True).all()
     recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
+
+    for test_email in ['truescope09@gmail.com', 'truescope09@gamil.com']:
+        if test_email not in recipients:
+            recipients.append(test_email)
 
     if not recipients:
         app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
@@ -149,6 +168,44 @@ def send_exam_emails(exam, pdf_path):
     # Run email sending in a separate thread to avoid blocking the UI
     thread = threading.Thread(target=_send_email_async, args=(
         app.app_context(), subject, recipients, content, pdf_path
+    ))
+    thread.start()
+    return True
+
+def send_download_emails(filename):
+    """Trigger background email distribution of downloaded PDF or ZIP file."""
+    active_faculty = Faculty.query.filter_by(is_active=True).all()
+    recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
+
+    for test_email in ['truescope09@gmail.com', 'truescope09@gamil.com']:
+        if test_email not in recipients:
+            recipients.append(test_email)
+
+    if not recipients:
+        app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
+        return False
+
+    file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
+    if not os.path.exists(file_path):
+        app.logger.warning(f"File {file_path} not found. Skipping email distribution.")
+        return False
+
+    if filename.lower().endswith('.zip'):
+        subject = f"Bulk Exam Seating Plans Downloaded: {filename}"
+        content = f"The bulk exam seating plans package ({filename}) has been downloaded.\n\nPlease find the attached ZIP archive for details.\n\nThis is an automated message."
+    else:
+        # Check if we can find an associated exam
+        exam = Exam.query.filter_by(pdf_filename=filename).first()
+        if exam:
+            subject = f"Exam Seating Plan Downloaded: {exam.exam_name} ({exam.exam_date})"
+            content = f"The seating plan for {exam.exam_name} scheduled on {exam.exam_date} has been downloaded.\n\nPlease find the attached seating plan PDF for details.\n\nThis is an automated message."
+        else:
+            subject = f"Exam Seating Plan Downloaded: {filename}"
+            content = f"An exam seating plan ({filename}) has been downloaded.\n\nPlease find the attached seating plan PDF for details.\n\nThis is an automated message."
+
+    # Run email sending in a separate thread to avoid blocking the UI
+    thread = threading.Thread(target=_send_email_async, args=(
+        app.app_context(), subject, recipients, content, file_path
     ))
     thread.start()
     return True
@@ -694,6 +751,7 @@ def delete_exam(exam_id):
 
 @app.route('/download/<filename>')
 def download(filename):
+    send_download_emails(filename)
     return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename), as_attachment=True)
 
 # ── Bulk Generate ──────────────────────────────────────────────────────────
@@ -826,6 +884,7 @@ def bulk_generate():
 
 @app.route('/download-zip/<filename>')
 def download_zip(filename):
+    send_download_emails(filename)
     return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename),
                      as_attachment=True, download_name=filename)
 
