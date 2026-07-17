@@ -340,6 +340,19 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         if total == 0:
             continue
 
+        # Check BEFORE drawing whether this row will fit on the current page.
+        # Checking after (the old behavior) let a row's content get clipped
+        # by the physical page edge whenever it was the last row on a page.
+        if y - row_h < MARGIN_B + 1 * cm:
+            c.showPage()
+            y = PAGE_H - MARGIN_T - 0.5 * cm
+            c.setFillColor(BLACK)
+            c.setFont("Helvetica-Bold", 9)
+            c.drawCentredString(page_w / 2, y,
+                f"MASTER SUMMARY (continued) — {exam_info.get('exam_name', '')}")
+            y -= 0.5 * cm
+            y = draw_header_row(y)
+
         grand_total += total
         for br, cnt in counts.items():
             grand_branch[br] += cnt
@@ -369,22 +382,12 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         c.setFont("Helvetica", 6.0)
         text = c.beginText()
         text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
-        text.setLeading(0.16*cm)
+        text.setLeading(0.26*cm)
         for item in branch_items:
             text.textLine(item)
         c.drawText(text)
 
         y -= row_h
-
-        if y < MARGIN_B + 2 * cm:
-            c.showPage()
-            y = PAGE_H - MARGIN_T - 0.5 * cm
-            c.setFillColor(BLACK)
-            c.setFont("Helvetica-Bold", 9)
-            c.drawCentredString(page_w / 2, y,
-                f"MASTER SUMMARY (continued) — {exam_info.get('exam_name', '')}")
-            y -= 0.5 * cm
-            y = draw_header_row(y)
 
     grand_items = [f"{br}: {grand_branch.get(br, 0) or '-'}" for br in all_branches if grand_branch.get(br, 0) > 0]
     if not grand_items:
@@ -402,7 +405,7 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     c.setFont("Helvetica", 6.0)
     text = c.beginText()
     text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
-    text.setLeading(0.16*cm)
+    text.setLeading(0.26*cm)
     for item in grand_items:
         text.textLine(item)
     c.drawText(text)

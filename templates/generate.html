@@ -109,7 +109,7 @@
               <td><span class="badge bg-primary">{{ exam.total_students }}</span></td>
               <td>
                 {% if exam.pdf_filename %}
-                <a href="{{ url_for('download', filename=exam.pdf_filename) }}" class="btn btn-sm btn-outline-success py-0 px-2">
+                <a href="javascript:void(0)" onclick="downloadAndNotify('{{ url_for('download', filename=exam.pdf_filename) }}', '{{ exam.pdf_filename }}', event)" class="btn btn-sm btn-outline-success py-0 px-2">
                   <i class="bi bi-download"></i>
                 </a>
                 {% endif %}

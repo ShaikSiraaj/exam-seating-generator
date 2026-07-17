@@ -210,8 +210,55 @@
   </div>
 </div>
 
+<div class="modal fade" id="emailNotifyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-envelope-check-fill text-success me-2"></i>Download Complete</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="emailNotifyModalBody">
+        The file has been downloaded.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">OK</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script>
+async function downloadAndNotify(url, filename, event) {
+  if (event) event.preventDefault();
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error('Download failed');
+
+    const count = response.headers.get('X-Faculty-Email-Count') || '0';
+    const blob = await response.blob();
+
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+
+    const body = document.getElementById('emailNotifyModalBody');
+    const n = parseInt(count, 10);
+    body.innerHTML = n > 0
+      ? `The file has been downloaded and emailed to <strong>${n}</strong> faculty member${n === 1 ? '' : 's'}.`
+      : `The file has been downloaded. No faculty emails were sent (no faculty with a valid email were found).`;
+
+    new bootstrap.Modal(document.getElementById('emailNotifyModal')).show();
+  } catch (err) {
+    console.error(err);
+    window.location.href = url;
+  }
+}
+</script>
 <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.8/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>

@@ -103,20 +103,22 @@ with app.app_context():
             _seed_block_halls(b.prefix)
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
 def _send_email_async(app_context, subject, recipients, content, pdf_path):
     with app_context:
         mail_server = os.environ.get('MAIL_SERVER')
         mail_port = int(os.environ.get('MAIL_PORT', 587))
-        mail_user = os.environ.get('truescope09@gmail.com')
-        mail_pass = os.environ.get('.True$cope@09')
+        mail_user = os.environ.get('MAIL_USERNAME')
+        mail_pass = os.environ.get('MAIL_PASSWORD')
+        app.logger.warning(f"DEBUG mail_user={mail_user!r} mail_pass_len={len(mail_pass) if mail_pass else 0}")
         mail_use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() == 'true'
         mail_use_ssl = os.environ.get('MAIL_USE_SSL', 'false').lower() == 'true' or mail_port == 465
         mail_sender = os.environ.get('MAIL_DEFAULT_SENDER') or mail_user
 
         missing = []
         if not mail_server: missing.append("MAIL_SERVER")
-        if not mail_user: missing.append("truescope09@gamil.com")
-        if not mail_pass: missing.append(".True$cope@09")
+        if not mail_user: missing.append("MAIL_USERNAME")
+        if not mail_pass: missing.append("MAIL_PASSWORD")
         if missing:
             app.logger.warning(f"SMTP settings not fully configured (missing: {', '.join(missing)}). Skipping email distribution.")
             return
@@ -154,10 +156,6 @@ def send_exam_emails(exam, pdf_path):
     active_faculty = Faculty.query.filter_by(is_active=True).all()
     recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
 
-    for test_email in ['truescope09@gmail.com', 'truescope09@gamil.com']:
-        if test_email not in recipients:
-            recipients.append(test_email)
-
     if not recipients:
         app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
         return False
@@ -173,22 +171,19 @@ def send_exam_emails(exam, pdf_path):
     return True
 
 def send_download_emails(filename):
-    """Trigger background email distribution of downloaded PDF or ZIP file."""
+    """Trigger background email distribution of downloaded PDF or ZIP file.
+    Returns the number of faculty the email was sent to (0 if none)."""
     active_faculty = Faculty.query.filter_by(is_active=True).all()
     recipients = [f.email for f in active_faculty if f.email and '@' in f.email]
 
-    for test_email in ['truescope09@gmail.com', 'truescope09@gamil.com']:
-        if test_email not in recipients:
-            recipients.append(test_email)
-
     if not recipients:
         app.logger.info("No faculty with valid email addresses found. Skipping email distribution.")
-        return False
+        return 0
 
     file_path = os.path.join(app.config['OUTPUT_FOLDER'], filename)
     if not os.path.exists(file_path):
         app.logger.warning(f"File {file_path} not found. Skipping email distribution.")
-        return False
+        return 0
 
     if filename.lower().endswith('.zip'):
         subject = f"Bulk Exam Seating Plans Downloaded: {filename}"
@@ -208,7 +203,7 @@ def send_download_emails(filename):
         app.app_context(), subject, recipients, content, file_path
     ))
     thread.start()
-    return True
+    return len(recipients)
 
 def parse_batch_from_filename(filename):
     """Extract AY26-30 → join=2026, passout=2030 from filename like AY26-30.xlsx"""
@@ -751,8 +746,11 @@ def delete_exam(exam_id):
 
 @app.route('/download/<filename>')
 def download(filename):
-    send_download_emails(filename)
-    return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename), as_attachment=True)
+    count = send_download_emails(filename)
+    resp = send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename), as_attachment=True)
+    resp.headers['X-Faculty-Email-Count'] = str(count)
+    resp.headers['Access-Control-Expose-Headers'] = 'X-Faculty-Email-Count'
+    return resp
 
 # ── Bulk Generate ──────────────────────────────────────────────────────────
 @app.route('/bulk-generate', methods=['GET', 'POST'])
@@ -884,9 +882,12 @@ def bulk_generate():
 
 @app.route('/download-zip/<filename>')
 def download_zip(filename):
-    send_download_emails(filename)
-    return send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename),
+    count = send_download_emails(filename)
+    resp = send_file(os.path.join(app.config['OUTPUT_FOLDER'], filename),
                      as_attachment=True, download_name=filename)
+    resp.headers['X-Faculty-Email-Count'] = str(count)
+    resp.headers['Access-Control-Expose-Headers'] = 'X-Faculty-Email-Count'
+    return resp
 
 @app.route('/admin/migrate-halls-6col', methods=['POST'])
 def migrate_halls_6col():

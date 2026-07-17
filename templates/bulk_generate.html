@@ -81,7 +81,7 @@
     <h5><i class="bi bi-file-earmark-zip-fill me-2"></i>All PDFs Ready!</h5>
     <p>Download all {{ results|selectattr('status','equalto','success')|list|length }} seating plan PDFs in one ZIP file.</p>
   </div>
-  <a href="{{ url_for('download_zip', filename=zip_filename) }}" class="btn btn-light btn-lg fw-bold px-4">
+  <a href="javascript:void(0)" onclick="downloadAndNotify('{{ url_for('download_zip', filename=zip_filename) }}', '{{ zip_filename }}', event)" class="btn btn-light btn-lg fw-bold px-4">
     <i class="bi bi-download me-2"></i>Download ZIP
   </a>
 </div>
@@ -113,7 +113,7 @@
       </div>
       <code style="font-size:11px;color:#6b7280">{{ r.exam_id }}</code>
       {% if r.status == 'success' and r.pdf %}
-      <a href="{{ url_for('download', filename=r.pdf) }}" class="btn btn-sm btn-outline-success py-0 px-2">
+      <a href="javascript:void(0)" onclick="downloadAndNotify('{{ url_for('download', filename=r.pdf) }}', '{{ r.pdf }}', event)" class="btn btn-sm btn-outline-success py-0 px-2">
         <i class="bi bi-download me-1"></i>PDF
       </a>
       {% endif %}
