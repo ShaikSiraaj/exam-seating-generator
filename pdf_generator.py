@@ -299,7 +299,9 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     col_room  = 1.5 * cm
     col_block = 1.8 * cm
     col_total = 1.2 * cm
-    col_branch = max(3.8 * cm, min(page_w - MARGIN_L - MARGIN_R - col_room - col_block - col_total, 6.2 * cm))
+    # Fill the complete printable width.  Capping this column at 6.2 cm
+    # compressed the master-plan table into the left side of every page.
+    col_branch = page_w - MARGIN_L - MARGIN_R - col_room - col_block - col_total
     total_w = col_room + col_block + col_total + col_branch
 
     xs = [MARGIN_L,
@@ -392,6 +394,18 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     grand_items = [f"{br}: {grand_branch.get(br, 0) or '-'}" for br in all_branches if grand_branch.get(br, 0) > 0]
     if not grand_items:
         grand_items = ["-"]
+
+    # Reserve space for the grand-total row, otherwise it can fall below the
+    # bottom margin when the preceding hall exactly fills a page.
+    if y - row_h < MARGIN_B + 1 * cm:
+        c.showPage()
+        y = PAGE_H - MARGIN_T - 0.5 * cm
+        c.setFillColor(BLACK)
+        c.setFont("Helvetica-Bold", 9)
+        c.drawCentredString(page_w / 2, y,
+            f"MASTER SUMMARY (continued) â€” {exam_info.get('exam_name', '')}")
+        y -= 0.5 * cm
+        y = draw_header_row(y)
 
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.3)
