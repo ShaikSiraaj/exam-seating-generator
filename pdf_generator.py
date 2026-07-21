@@ -270,7 +270,7 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     y -= 0.45 * cm
 
     c.setFont("Helvetica-Bold", 14)
-    title = "MASTER SEATING PLAN — ROOM WISE SUMMARY"
+    title = "MASTER SEATING PLAN - ROOM WISE SUMMARY"
     c.drawCentredString(page_w / 2, y, title)
     tw = c.stringWidth(title, "Helvetica-Bold", 14)
     c.setLineWidth(0.8)
@@ -299,40 +299,48 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     col_room  = 1.5 * cm
     col_block = 1.8 * cm
     col_total = 1.2 * cm
-    # Fill the complete printable width.  Capping this column at 6.2 cm
-    # compressed the master-plan table into the left side of every page.
-    col_branch = page_w - MARGIN_L - MARGIN_R - col_room - col_block - col_total
-    total_w = col_room + col_block + col_total + col_branch
+    printable_w = page_w - MARGIN_L - MARGIN_R
+    col_branch = (printable_w - col_room - col_block - col_total) / max(1, len(all_branches))
+    total_w = printable_w
 
     xs = [MARGIN_L,
           MARGIN_L + col_room,
           MARGIN_L + col_room + col_block,
           MARGIN_L + col_room + col_block + col_total]
+    for _ in all_branches[:-1]:
+        xs.append(xs[-1] + col_branch)
 
-    row_h = 0.58 * cm + 0.26 * cm * max(1, len(all_branches))
+    header_h = 0.75 * cm
+    row_h = 0.72 * cm
+    header_fill = colors.HexColor("#E8EEF5")
+    alternate_fill = colors.HexColor("#F7F9FC")
+    total_fill = colors.HexColor("#DCE6F1")
 
     def draw_header_row(y_pos):
+        c.setFillColor(header_fill)
+        c.setStrokeColor(BLACK)
+        c.setLineWidth(0.5)
+        c.rect(MARGIN_L, y_pos - header_h, total_w, header_h, fill=1, stroke=1)
         c.setFillColor(BLACK)
-        c.rect(MARGIN_L, y_pos - row_h, total_w, row_h, fill=1, stroke=0)
-        c.setFillColor(WHITE)
-        c.setFont("Helvetica-Bold", 6.5)
-        c.drawString(xs[0] + 0.1*cm, y_pos - row_h*0.65, "Room")
-        c.drawString(xs[1] + 0.1*cm, y_pos - row_h*0.65, "Block")
-        c.drawString(xs[2] + 0.1*cm, y_pos - row_h*0.65, "Total")
-        c.drawString(xs[3] + 0.1*cm, y_pos - row_h*0.65, "Branches")
-        c.setStrokeColor(WHITE)
+        c.setFont("Helvetica-Bold", 7)
+        c.drawString(xs[0] + 0.1*cm, y_pos - header_h*0.62, "Room")
+        c.drawString(xs[1] + 0.1*cm, y_pos - header_h*0.62, "Block")
+        c.drawString(xs[2] + 0.1*cm, y_pos - header_h*0.62, "Total")
+        for branch, x_pos in zip(all_branches, xs[3:]):
+            c.drawCentredString(x_pos + col_branch / 2, y_pos - header_h*0.62, branch)
+        c.setStrokeColor(BLACK)
         c.setLineWidth(0.4)
         for x_line in xs[1:]:
-            c.line(x_line, y_pos, x_line, y_pos - row_h)
-        c.line(MARGIN_L + total_w, y_pos, MARGIN_L + total_w, y_pos - row_h)
+            c.line(x_line, y_pos, x_line, y_pos - header_h)
         c.setFillColor(BLACK)
-        return y_pos - row_h
+        return y_pos - header_h
 
     y = draw_header_row(y)
 
     sorted_halls = sorted(halls, key=lambda h: h['hall_id'])
     grand_total = 0
     grand_branch = defaultdict(int)
+    displayed_rows = 0
 
     for hall in sorted_halls:
         hid = hall['hall_id']
@@ -342,16 +350,14 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         if total == 0:
             continue
 
-        # Check BEFORE drawing whether this row will fit on the current page.
-        # Checking after (the old behavior) let a row's content get clipped
-        # by the physical page edge whenever it was the last row on a page.
+        # Keep a complete room row inside the printable page area.
         if y - row_h < MARGIN_B + 1 * cm:
             c.showPage()
             y = PAGE_H - MARGIN_T - 0.5 * cm
             c.setFillColor(BLACK)
             c.setFont("Helvetica-Bold", 9)
             c.drawCentredString(page_w / 2, y,
-                f"MASTER SUMMARY (continued) — {exam_info.get('exam_name', '')}")
+                f"MASTER SUMMARY (continued) - {exam_info.get('exam_name', '')}")
             y -= 0.5 * cm
             y = draw_header_row(y)
 
@@ -359,10 +365,10 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         for br, cnt in counts.items():
             grand_branch[br] += cnt
 
-        branch_items = [f"{br}: {counts.get(br, 0)}" for br in all_branches if counts.get(br, 0) > 0]
-        if not branch_items:
-            branch_items = ["-"]
-
+        if displayed_rows % 2:
+            c.setFillColor(alternate_fill)
+            c.rect(MARGIN_L, y - row_h, total_w, row_h, fill=1, stroke=0)
+        c.setFillColor(BLACK)
         c.setStrokeColor(BLACK)
         c.setLineWidth(0.3)
         c.line(MARGIN_L, y, MARGIN_L + total_w, y)
@@ -381,19 +387,13 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         c.setFont("Helvetica-Bold", 7)
         c.drawString(xs[2] + 0.1*cm, y - row_h*0.65, str(total))
 
-        c.setFont("Helvetica", 6.0)
-        text = c.beginText()
-        text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
-        text.setLeading(0.26*cm)
-        for item in branch_items:
-            text.textLine(item)
-        c.drawText(text)
+        c.setFont("Helvetica", 7)
+        for branch, x_pos in zip(all_branches, xs[3:]):
+            c.drawCentredString(x_pos + col_branch / 2, y - row_h*0.65,
+                                str(counts.get(branch, 0)))
 
         y -= row_h
-
-    grand_items = [f"{br}: {grand_branch.get(br, 0) or '-'}" for br in all_branches if grand_branch.get(br, 0) > 0]
-    if not grand_items:
-        grand_items = ["-"]
+        displayed_rows += 1
 
     # Reserve space for the grand-total row, otherwise it can fall below the
     # bottom margin when the preceding hall exactly fills a page.
@@ -403,27 +403,24 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
         c.setFillColor(BLACK)
         c.setFont("Helvetica-Bold", 9)
         c.drawCentredString(page_w / 2, y,
-            f"MASTER SUMMARY (continued) â€” {exam_info.get('exam_name', '')}")
+            f"MASTER SUMMARY (continued) - {exam_info.get('exam_name', '')}")
         y -= 0.5 * cm
         y = draw_header_row(y)
 
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.3)
     c.line(MARGIN_L, y, MARGIN_L + total_w, y)
-    c.setFillColor(BLACK)
+    c.setFillColor(total_fill)
     c.rect(MARGIN_L, y - row_h, total_w, row_h, fill=1, stroke=0)
-    c.setFillColor(WHITE)
+    c.setFillColor(BLACK)
     c.setFont("Helvetica-Bold", 7.5)
     c.drawString(xs[0] + 0.1*cm, y - row_h*0.65, "GRAND TOTAL")
     c.drawString(xs[2] + 0.1*cm, y - row_h*0.65, str(grand_total))
-    c.setFont("Helvetica", 6.0)
-    text = c.beginText()
-    text.setTextOrigin(xs[3] + 0.08*cm, y - row_h*0.8)
-    text.setLeading(0.26*cm)
-    for item in grand_items:
-        text.textLine(item)
-    c.drawText(text)
-    c.setStrokeColor(WHITE)
+    c.setFont("Helvetica-Bold", 7)
+    for branch, x_pos in zip(all_branches, xs[3:]):
+        c.drawCentredString(x_pos + col_branch / 2, y - row_h*0.65,
+                            str(grand_branch.get(branch, 0)))
+    c.setStrokeColor(BLACK)
     c.setLineWidth(0.4)
     for x_line in xs[1:]:
         c.line(x_line, y, x_line, y - row_h)
@@ -433,6 +430,23 @@ def draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, pag
     c.setStrokeColor(BLACK)
     c.setLineWidth(0.5)
     c.line(MARGIN_L, y - row_h, MARGIN_L + total_w, y - row_h)
+
+
+def generate_master_plan_pdf(assignments, hall_faculty, halls, exam_info, output_path):
+    """
+    Render ONLY the Master Plan (room-wise branch count summary) as its own
+    standalone PDF — the same page(s) that appear first in generate_pdf(),
+    but produced directly on a fresh canvas rather than sliced out of an
+    already-built PDF. Slicing pages from a finished ReportLab PDF (e.g. with
+    PyPDF2) can corrupt the shared graphics state on rows after the first,
+    so this dedicated entry point is the safe way to get a Master-Plan-only
+    file (for a "download master plan" button, email attachment, etc.).
+    """
+    c = canvas.Canvas(output_path, pagesize=A4)
+    page_w, page_h = A4
+    draw_master_plan(c, assignments, hall_faculty, halls, exam_info, page_w, page_h)
+    c.save()
+    return output_path
 
 
 def generate_pdf(assignments, hall_faculty, halls, blocks, exam_info, output_path):
