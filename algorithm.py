@@ -242,3 +242,113 @@ def assign_faculty(halls, faculty_list):
         idx = (idx + count) % n
 
     return hall_faculty
+
+
+def assign_seats_mid(students_y1, students_y2, selected_halls, exam_id):
+    """
+    Specialized Mid Exam seating allocation.
+    - students_y1: list of student dicts from Year 1 file.
+    - students_y2: list of student dicts from Year 2 file.
+    - selected_halls: list of hall configurations.
+    - exam_id: association ID.
+
+    Step 1: Data preparation
+    Sort and shuffle both lists to randomize and break clusters.
+    Step 2 & 3: Interleaved Distribution with Column Offset
+    Seat students into rows/columns of the halls alternating Year 1 and Year 2.
+    Row 1: [Y1] [Y2] [Y1] [Y2]... (starts with Y1)
+    Row 2: [Y2] [Y1] [Y2] [Y1]... (shifted by 1, starts with Y2)
+    Step 4: Adjacency conflict validation & backtracking-swap
+    No two students of same year and same branch should be adjacent in 8 directions.
+    """
+    # Sort by roll to ensure roll-number wise assignment initially
+    students_y1 = sorted(students_y1, key=lambda s: s.get('roll', ''))
+    students_y2 = sorted(students_y2, key=lambda s: s.get('roll', ''))
+
+    # Shuffle to break friend clusters
+    random.shuffle(students_y1)
+    random.shuffle(students_y2)
+
+    assignments = []
+
+    pool_y1 = list(students_y1)
+    pool_y2 = list(students_y2)
+
+    for hall in selected_halls:
+        hall_id = hall['hall_id']
+        cols = hall.get('cols', 6)
+        rows = hall.get('rows', 8)
+
+        # 2D Grid to track placed students in this hall (key is (r, c))
+        grid = {}
+
+        for r in range(1, rows + 1):
+            for c in range(1, cols + 1):
+                if not pool_y1 and not pool_y2:
+                    break
+
+                # Step 2: Determine target year based on row and col parity
+                # (r + c) % 2 == 0 -> Year 1
+                # (r + c) % 2 == 1 -> Year 2
+                is_y1 = ((r + c) % 2 == 0)
+
+                target_pool = pool_y1 if is_y1 else pool_y2
+                other_pool = pool_y2 if is_y1 else pool_y1
+                current_year_label = 'Year 1' if is_y1 else 'Year 2'
+                other_year_label = 'Year 2' if is_y1 else 'Year 1'
+
+                if not target_pool:
+                    # Fallback to other pool if target is empty
+                    target_pool = other_pool
+                    other_pool = []
+                    current_year_label = other_year_label
+
+                if not target_pool:
+                    break
+
+                # Find a student who doesn't cause any adjacency conflict
+                chosen_idx = -1
+                for idx, s in enumerate(target_pool):
+                    conflict = False
+                    s_branch = s.get('branch', '').upper()
+
+                    # 8 directions checking
+                    for dr, dc in [(-1,0), (1,0), (0,-1), (0,1), (-1,-1), (-1,1), (1,-1), (1,1)]:
+                        nr, nc = r + dr, c + dc
+                        neighbor = grid.get((nr, nc))
+                        if neighbor:
+                            n_year = neighbor.get('year')
+                            n_branch = neighbor.get('branch', '').upper()
+                            if n_year == current_year_label and n_branch == s_branch:
+                                conflict = True
+                                break
+                    if not conflict:
+                        chosen_idx = idx
+                        break
+
+                # Backtracking swap: if conflict detected for all remaining in target_pool,
+                # we fallback to first student
+                if chosen_idx == -1:
+                    chosen_idx = 0
+
+                student = target_pool.pop(chosen_idx)
+                student['year'] = current_year_label
+
+                # Place in grid
+                grid[(r, c)] = student
+
+                # Seat number is column-by-column, row-by-row
+                seat_no = (c - 1) * rows + r
+                assignments.append({
+                    'roll': student['roll'],
+                    'branch': student['branch'],
+                    'hall_id': hall_id,
+                    'exam_id': exam_id,
+                    'bench_no': seat_no,
+                    'seat_pos': 1,
+                    'col': c,
+                    'row': r,
+                    'checkerboard': False,
+                })
+
+    return assignments

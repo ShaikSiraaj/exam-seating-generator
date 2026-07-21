@@ -170,6 +170,9 @@
   <a href="{{ url_for('generate') }}" class="nav-link {% if request.endpoint=='generate' %}active{% endif %}">
     <i class="bi bi-lightning-fill"></i> Generate Plan
   </a>
+  <a href="{{ url_for('mid_examination') }}" class="nav-link {% if request.endpoint=='mid_examination' %}active{% endif %}">
+    <i class="bi bi-file-earmark-medical-fill"></i> Mid Examination
+  </a>
   <a href="{{ url_for('bulk_generate') }}" class="nav-link {% if request.endpoint=='bulk_generate' %}active{% endif %}">
     <i class="bi bi-collection-fill"></i> Bulk Generate (6)
   </a>
