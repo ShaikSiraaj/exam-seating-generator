@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Mid Examination Seating Plan{% endblock %}
+{% block page_title %}Mid Examination Seating Plan{% endblock %}
+{% block content %}
+<div class="row g-3 mb-3">
+  {% for label, val, icon, color in [
+    ('Students in DB', student_count, 'bi-people-fill', '#0c4a9e'),
+    ('Faculty in DB',  faculty_count, 'bi-person-badge-fill', '#1d6a1d'),
+    ('Active Halls',   hall_count,    'bi-building', '#7a5900'),
+  ] %}
+  <div class="col-12 col-md-4">
+    <div class="stat-card d-flex align-items-center gap-3">
+      <div class="stat-icon" style="background:{{ '#dae8fc' if loop.index==1 else '#d5e8d4' if loop.index==2 else '#fff2cc' }}">
+        <i class="{{ icon }}" style="color:{{ color }}"></i>
+      </div>
+      <div><div class="stat-value">{{ val }}</div><div class="stat-label">{{ label }}</div></div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+{% if faculty_count == 0 or hall_count == 0 %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>Setup incomplete.</strong>
+  {% if faculty_count == 0 %}<a href="{{ url_for('faculty') }}">Add faculty</a> • {% endif %}
+  {% if hall_count == 0 %}<a href="{{ url_for('halls') }}">Configure halls</a>{% endif %}
+</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-file-earmark-medical-fill me-2"></i>New Mid Exam Configuration</div>
+      <div class="card-body">
+        <form method="POST" action="{{ url_for('mid_examination') }}" enctype="multipart/form-data" id="midExamForm">
+          <div class="row g-3 mb-3">
+            <div class="col-md-6">
+              <label class="form-label">College Name *</label>
+              <input type="text" name="college" class="form-control" required placeholder="ANITS" value="ANITS"/>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Exam Name *</label>
+              <input type="text" name="exam_name" class="form-control" required
+                value="Mid Term Examinations"
+                placeholder="Mid Term Examinations"/>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-3">
+            <div class="col-md-4">
+              <label class="form-label">Exam ID *</label>
+              <input type="text" name="exam_id" class="form-control" required placeholder="EX2026MID" id="examIdInput"/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Exam Date * <small class="text-muted">(today or future only)</small></label>
+              <input type="text" name="exam_date" class="form-control date-picker" required
+                placeholder="Pick a date" id="examDateInput" readonly/>
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Session *</label>
+              <input type="text" name="session" class="form-control" value="10:00 AM-12:00 PM" required/>
+            </div>
+          </div>
+
+          <div class="row g-3 mb-4">
+            <div class="col-md-6">
+              <div class="p-3 border rounded bg-light">
+                <label class="form-label text-primary d-flex align-items-center gap-2">
+                  <i class="bi bi-file-earmark-excel-fill fs-5 text-success"></i>
+                  Year 1 Students Excel File * (e.g. 2nd Year)
+                </label>
+                <input type="file" name="excel_file_1" class="form-control" required accept=".xlsx,.xls"/>
+                <div class="form-text">Upload first year group's Excel containing Roll Number, Branch columns.</div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="p-3 border rounded bg-light">
+                <label class="form-label text-primary d-flex align-items-center gap-2">
+                  <i class="bi bi-file-earmark-excel-fill fs-5 text-success"></i>
+                  Year 2 Students Excel File * (e.g. 3rd Year)
+                </label>
+                <input type="file" name="excel_file_2" class="form-control" required accept=".xlsx,.xls"/>
+                <div class="form-text">Upload second year group's Excel containing Roll Number, Branch columns.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="form-label d-flex align-items-center gap-2 mb-2">
+              <i class="bi bi-building-fill text-warning"></i>
+              Select Rooms / Halls to Allocate * (Checkboxes)
+            </label>
+            <div class="row g-2 px-2" style="max-height: 250px; overflow-y: auto; border: 1.5px solid #d1d5db; border-radius: 8px; padding: 12px 0;">
+              {% for hall in active_halls %}
+              <div class="col-md-4 col-sm-6 col-12 px-3">
+                <div class="form-check p-2 border rounded bg-white shadow-sm d-flex align-items-center">
+                  <input class="form-check-input ms-1" type="checkbox" name="selected_halls" value="{{ hall.hall_id }}" id="hall_{{ hall.hall_id }}" checked style="margin-top:0">
+                  <label class="form-check-label ms-2 cursor-pointer w-100" for="hall_{{ hall.hall_id }}">
+                    <strong class="text-primary">{{ hall.hall_id }}</strong>
+                    <span class="text-muted" style="font-size:11px">({{ hall.cols }}x{{ hall.rows }} = {{ hall.capacity }} Seats)</span>
+                  </label>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            <div class="form-text">Rooms will be sequentially filled. Untick any rooms you do not wish to use.</div>
+          </div>
+
+          <button type="submit" class="btn btn-primary w-100 py-2.5" {% if faculty_count==0 or hall_count==0 %}disabled{% endif %}>
+            <i class="bi bi-lightning-fill me-2"></i>Generate Mid Exam Seating Plan & PDF
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Auto-generate Mid exam ID
+  const now    = new Date();
+  const months = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('examIdInput').value = `MID${now.getFullYear()}${months[now.getMonth()]}`;
+
+  // Form validation: ensure date is filled (flatpickr handles min=today)
+  document.getElementById('midExamForm').addEventListener('submit', function(e) {
+    const dateVal = document.getElementById('examDateInput').value;
+    if (!dateVal) {
+      e.preventDefault();
+      alert('Please select an exam date.');
+      return;
+    }
+
+    // Ensure at least one hall is checked
+    const checkedHalls = document.querySelectorAll('input[name="selected_halls"]:checked');
+    if (checkedHalls.length === 0) {
+      e.preventDefault();
+      alert('Please select at least one Room/Hall to allocate.');
+    }
+  });
+});
+</script>
+{% endblock %}

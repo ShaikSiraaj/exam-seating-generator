@@ -227,50 +227,64 @@ def find_col(cols, candidates):
 def parse_excel_students(file, batch_code=None):
     path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(path)
-    df = pd.read_excel(path)
-    df.columns = [str(c).strip().lower().replace(' ','_') for c in df.columns]
-    cols = list(df.columns)
-    roll_col   = find_col(cols, ['roll_number','rollnumber','roll_no','rollno','roll','htno','ht_no','rno']) or cols[0]
-    branch_col = find_col(cols, ['branch','dept','department','stream','course']) or (cols[1] if len(cols)>1 else cols[0])
-    sec_col    = find_col(cols, ['section','sec'])
-    students   = []
-    for _, row in df.iterrows():
-        roll   = str(row[roll_col]).strip()
-        branch = str(row[branch_col]).strip().upper()
-        if roll and roll.lower() not in ('nan','none',''):
-            students.append({
-                'roll': roll, 'branch': branch,
-                'section': str(row[sec_col]).strip() if sec_col else '',
-                'batch_code': batch_code
-            })
+    sheets_dict = pd.read_excel(path, sheet_name=None)
+    students = []
+    for sheet_name, df in sheets_dict.items():
+        if df.empty:
+            continue
+        df.columns = [str(c).strip().lower().replace(' ','_') for c in df.columns]
+        cols = list(df.columns)
+        if not cols:
+            continue
+        roll_col   = find_col(cols, ['roll_number','rollnumber','roll_no','rollno','roll','htno','ht_no','rno']) or cols[0]
+        branch_col = find_col(cols, ['branch','dept','department','stream','course']) or (cols[1] if len(cols)>1 else cols[0])
+        sec_col    = find_col(cols, ['section','sec'])
+        for _, row in df.iterrows():
+            if roll_col not in row or pd.isna(row[roll_col]):
+                continue
+            roll = str(row[roll_col]).strip()
+            branch = str(row[branch_col]).strip().upper() if branch_col in row and pd.notna(row[branch_col]) else 'UNKNOWN'
+            if roll and roll.lower() not in ('nan','none',''):
+                students.append({
+                    'roll': roll, 'branch': branch,
+                    'section': str(row[sec_col]).strip() if sec_col and sec_col in row and pd.notna(row[sec_col]) else '',
+                    'batch_code': batch_code
+                })
     return students
 
 def parse_excel_faculty(file):
     path = os.path.join(app.config['UPLOAD_FOLDER'], file.filename)
     file.save(path)
-    df = pd.read_excel(path)
-    df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
-    cols = list(df.columns)
-    name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
-    id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
-    contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
-    email_col   = find_col(cols, ['email','mail','email_id','mail_id','email_address','emailaddress','e_mail','e_mail_address','emailid','mailid'])
-    dept_col    = find_col(cols, ['dept','department','department_name'])
+    sheets_dict = pd.read_excel(path, sheet_name=None)
     facs = []
-    for _, row in df.iterrows():
-        name = str(row[name_col]).strip()
-        if name and name.lower() not in ('nan','none',''):
-            raw_email = row[email_col] if email_col else ''
-            email_value = ''
-            if pd.notna(raw_email):
-                email_value = str(raw_email).strip()
-            facs.append({
-                'name': name,
-                'faculty_id': str(row[id_col]).strip(),
-                'contact': str(row[contact_col]).strip() if pd.notna(row[contact_col]) else '',
-                'email': email_value,
-                'department': str(row[dept_col]).strip() if dept_col and pd.notna(row[dept_col]) else ''
-            })
+    for sheet_name, df in sheets_dict.items():
+        if df.empty:
+            continue
+        df.columns = [str(c).strip().lower().replace(' ', '_') for c in df.columns]
+        cols = list(df.columns)
+        if not cols:
+            continue
+        name_col    = find_col(cols, ['name','faculty_name','staff_name']) or cols[0]
+        id_col      = find_col(cols, ['faculty_id','facultyid','staff_id','emp_id','id']) or (cols[1] if len(cols)>1 else cols[0])
+        contact_col = find_col(cols, ['contact','phone','mobile','phone_number']) or (cols[2] if len(cols)>2 else cols[0])
+        email_col   = find_col(cols, ['email','mail','email_id','mail_id','email_address','emailaddress','e_mail','e_mail_address','emailid','mailid'])
+        dept_col    = find_col(cols, ['dept','department','department_name'])
+        for _, row in df.iterrows():
+            if name_col not in row or pd.isna(row[name_col]):
+                continue
+            name = str(row[name_col]).strip()
+            if name and name.lower() not in ('nan','none',''):
+                raw_email = row[email_col] if email_col and email_col in row else ''
+                email_value = ''
+                if pd.notna(raw_email):
+                    email_value = str(raw_email).strip()
+                facs.append({
+                    'name': name,
+                    'faculty_id': str(row[id_col]).strip() if id_col in row else '',
+                    'contact': str(row[contact_col]).strip() if contact_col and contact_col in row and pd.notna(row[contact_col]) else '',
+                    'email': email_value,
+                    'department': str(row[dept_col]).strip() if dept_col and dept_col in row and pd.notna(row[dept_col]) else ''
+                })
     return facs
 
 def make_pdf_filename(exam_date, exam_name=None, batch_code=None):
@@ -711,6 +725,126 @@ def generate():
         flash(f'Generation Error: {str(e)}', 'danger')
         app.logger.error(traceback.format_exc())
         return redirect(url_for('generate'))
+
+
+@app.route('/mid-examination', methods=['GET', 'POST'])
+def mid_examination():
+    if request.method == 'GET':
+        return render_template('mid_examination.html',
+                               student_count=Student.query.count(),
+                               faculty_count=Faculty.query.count(),
+                               hall_count=Hall.query.filter_by(is_active=True).count(),
+                               active_halls=Hall.query.filter_by(is_active=True).order_by(Hall.hall_id).all())
+
+    try:
+        exam_id    = request.form.get('exam_id','').strip() or f"MID{uuid.uuid4().hex[:6].upper()}"
+        exam_name  = request.form.get('exam_name','').strip()
+        college    = request.form.get('college','College Name').strip()
+        exam_date  = request.form.get('exam_date','').strip()
+        session    = request.form.get('session','10:00 AM - 12:00 PM').strip()
+        selected_hall_ids = request.form.getlist('selected_halls')
+
+        # Validate exam date is not in the past
+        try:
+            _exam_dt = datetime.strptime(exam_date.replace('/', '-'), '%d-%m-%Y').date()
+            if _exam_dt < get_utc_now().date():
+                flash('Exam date cannot be in the past. Please select today or a future date.', 'danger')
+                return redirect(url_for('mid_examination'))
+        except Exception:
+            pass
+
+        if not selected_hall_ids:
+            flash('At least one Room/Hall must be selected.', 'danger')
+            return redirect(url_for('mid_examination'))
+
+        if Exam.query.filter_by(exam_id=exam_id).first():
+            flash(f'Exam ID {exam_id} already exists.', 'danger')
+            return redirect(url_for('mid_examination'))
+
+        file1 = request.files.get('excel_file_1')
+        file2 = request.files.get('excel_file_2')
+        if not file1 or not file1.filename or not file2 or not file2.filename:
+            flash('Please upload both student Excel files.', 'danger')
+            return redirect(url_for('mid_examination'))
+
+        # Parse Excel files
+        students_y1 = parse_excel_students(file1, 'MID-Y1')
+        students_y2 = parse_excel_students(file2, 'MID-Y2')
+
+        if not students_y1 or not students_y2:
+            flash('Both uploaded files must contain valid student records.', 'danger')
+            return redirect(url_for('mid_examination'))
+
+        faculty_list = [{'name': f.name, 'faculty_id': f.faculty_id, 'contact': f.contact}
+                        for f in Faculty.query.filter_by(is_active=True).all()]
+        if not faculty_list:
+            flash('No faculty in database. Please add faculty first.', 'danger')
+            return redirect(url_for('mid_examination'))
+
+        active_halls = Hall.query.filter_by(is_active=True).filter(Hall.hall_id.in_(selected_hall_ids)).order_by(Hall.hall_id).all()
+        total_capacity = sum(h.capacity for h in active_halls)
+        total_students_count = len(students_y1) + len(students_y2)
+
+        if total_students_count > total_capacity:
+            flash(f"Insufficient capacity! Required: {total_students_count} ({len(students_y1)} + {len(students_y2)}), Available: {total_capacity}. Please select more rooms.", "danger")
+            return redirect(url_for('mid_examination'))
+
+        halls_data   = [{'hall_id': h.hall_id, 'hall_name': h.hall_name, 'cols': h.cols, 'rows': h.rows} for h in active_halls]
+        blocks_data  = [{'prefix': b.prefix, 'department': b.department, 'block_name': b.block_name} for b in Block.query.all()]
+        exam_info    = {'exam_id': exam_id, 'exam_name': exam_name, 'college': college,
+                        'exam_date': exam_date, 'session': session, 'batch_code': 'MID',
+                        'algorithm': 'mid_interleave'}
+
+        # Import the specialized algorithm
+        from algorithm import assign_seats_mid
+        assignments  = assign_seats_mid(students_y1, students_y2, halls_data, exam_id)
+        hall_faculty = assign_faculty(halls_data, faculty_list)
+
+        exam_obj = Exam(exam_id=exam_id, exam_name=exam_name, college=college,
+                        exam_date=exam_date, session=session, batch_code='MID',
+                        algorithm='mid_interleave', total_students=len(assignments))
+        db.session.add(exam_obj)
+
+        for a in assignments:
+            fac_str = ', '.join(f.get('name','') for f in hall_faculty.get(a['hall_id'], []))
+            db.session.add(SeatingHistory(exam_id=exam_id, roll_number=a['roll'], branch=a['branch'],
+                hall_id=a['hall_id'], bench_no=a['bench_no'], seat_pos=a['seat_pos'],
+                col=a['col'], row=a['row'], faculty_assigned=fac_str))
+
+        pdf_filename = make_pdf_filename(exam_date, exam_name, 'MID')
+        pdf_path     = os.path.join(app.config['OUTPUT_FOLDER'], pdf_filename)
+        for h in halls_data:
+            h['faculty'] = hall_faculty.get(h['hall_id'], [])
+
+        try:
+            generate_pdf(assignments, hall_faculty, halls_data, blocks_data, exam_info, pdf_path)
+        except Exception as pdf_err:
+            db.session.rollback()
+            flash(f'PDF Generation Error: {str(pdf_err)}', 'danger')
+            app.logger.error(f"PDF Error: {traceback.format_exc()}")
+            return redirect(url_for('mid_examination'))
+
+        exam_obj.pdf_filename = pdf_filename
+        try:
+            db.session.commit()
+        except Exception as db_err:
+            db.session.rollback()
+            flash(f'Database Error while saving exam: {str(db_err)}', 'danger')
+            app.logger.error(f"DB Error: {traceback.format_exc()}")
+            return redirect(url_for('mid_examination'))
+
+        # Trigger background email distribution
+        send_exam_emails(exam_obj, pdf_path)
+
+        flash(f'Mid exam seating plan generated for {len(assignments)} students!', 'success')
+        return redirect(url_for('exam_detail', exam_id=exam_id))
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Generation Error: {str(e)}', 'danger')
+        app.logger.error(traceback.format_exc())
+        return redirect(url_for('mid_examination'))
+
 
 # ── Exams ──────────────────────────────────────────────────────────────────
 @app.route('/exams')

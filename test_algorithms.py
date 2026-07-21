@@ -42,5 +42,23 @@ class TestAlgorithms(unittest.TestCase):
         hall_a101 = [a for a in assignments if a['hall_id'] == 'A101']
         self.assertEqual(len(hall_a101), 48)
 
+    def test_assign_seats_mid(self):
+        from algorithm import assign_seats_mid
+        students_y1 = [{'roll': f'Y1-{i}', 'branch': 'CSE'} for i in range(1, 25)]
+        students_y2 = [{'roll': f'Y2-{i}', 'branch': 'ECE'} for i in range(1, 25)]
+
+        # Test basic mid exam seating distribution
+        assignments = assign_seats_mid(students_y1, students_y2, self.halls, 'MID-TEST')
+        self.assertEqual(len(assignments), 48)
+
+        # Check alternate-seat checkerboard of years (alternating row starts)
+        for a in assignments:
+            row, col = a['row'], a['col']
+            is_y1 = ((row + col) % 2 == 0)
+            if is_y1:
+                self.assertTrue(a['roll'].startswith('Y1-'))
+            else:
+                self.assertTrue(a['roll'].startswith('Y2-'))
+
 if __name__ == '__main__':
     unittest.main()
