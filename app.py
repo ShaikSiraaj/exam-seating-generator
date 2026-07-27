@@ -15,7 +15,7 @@ from sqlalchemy import text
 from flask import Flask, render_template, request, redirect, url_for, flash, send_file
 import pandas as pd
 from models import db, Batch, Block, Hall, Student, Faculty, Exam, SeatingHistory, get_utc_now
-from algorithm import assign_seats, assign_faculty, checkerboard_capacity
+from algorithm import assign_seats, assign_faculty, checkerboard_capacity, assign_seats_mid
 from pdf_generator import generate_pdf
 
 
@@ -795,8 +795,6 @@ def mid_examination():
                         'exam_date': exam_date, 'session': session, 'batch_code': 'MID',
                         'algorithm': 'mid_interleave'}
 
-        # Import the specialized algorithm
-        from algorithm import assign_seats_mid
         assignments  = assign_seats_mid(students_y1, students_y2, halls_data, exam_id)
         hall_faculty = assign_faculty(halls_data, faculty_list)
 

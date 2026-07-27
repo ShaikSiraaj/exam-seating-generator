@@ -1,5 +1,5 @@
 import unittest
-from algorithm import assign_seats, checkerboard_capacity
+from algorithm import assign_seats, checkerboard_capacity, assign_seats_mid
 
 class TestAlgorithms(unittest.TestCase):
     def setUp(self):
@@ -43,7 +43,6 @@ class TestAlgorithms(unittest.TestCase):
         self.assertEqual(len(hall_a101), 48)
 
     def test_assign_seats_mid(self):
-        from algorithm import assign_seats_mid
         students_y1 = [{'roll': f'Y1-{i}', 'branch': 'CSE'} for i in range(1, 25)]
         students_y2 = [{'roll': f'Y2-{i}', 'branch': 'ECE'} for i in range(1, 25)]
 
